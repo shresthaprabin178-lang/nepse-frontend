@@ -1,5 +1,7 @@
-let stocks = JSON.parse(localStorage.getItem('stocks')) || [];
-const BACKEND_URL = "https://nepse-live-backend-1.onrender.com";
+let stocks = JSON.parse(localStorage.getItem('stocks'))?.map(s => ({
+    ...s,
+    name: s.name.toUpperCase()
+})) || [];
 
 function saveStocks() {
     localStorage.setItem('stocks', JSON.stringify(stocks));
@@ -39,7 +41,10 @@ function displayStocks() {
         const plPercent = stock.wacc > 0 ? ((stock.ltp - stock.wacc) / stock.wacc) * 100 : 0;
         const investment = stock.wacc * stock.quantity;
 
-        currentValue += amount; totalPL += profitLoss; currentInvestment += investment; totalProfitLoss += profitLoss;
+        currentValue += amount;
+        totalPL += profitLoss;
+        currentInvestment += investment;
+        totalProfitLoss += profitLoss;
 
         const row = document.createElement("tr");
         row.innerHTML = `
@@ -81,18 +86,29 @@ function sortStocks(field) {
     displayStocks();
 }
 
-// Fetch live LTP from backend
+// Fetch live LTP from backend (Render URL)
 async function fetchLiveLTP() {
     for (let stock of stocks) {
+        const symbol = stock.name.toUpperCase();
+        console.log("Fetching LTP for symbol:", symbol);
+
         try {
-            const resp = await fetch(`${BACKEND_URL}/api/ltp?symbol=${stock.name}`);
-            if (!resp.ok) continue;
+            const resp = await fetch(`https://nepse-live-backend-1.onrender.com/api/ltp?symbol=${symbol}`);
+            if (!resp.ok) {
+                console.error("Response not OK for", symbol, resp.status);
+                stock.ltp = 0;
+                continue;
+            }
+
             const data = await resp.json();
-            // Ensure symbol name is uppercase and handle possible string/number
-            stock.ltp = parseFloat(data.ltp ?? data.LTP ?? 0);
-            console.log(`Fetched LTP for ${stock.name}:`, stock.ltp);    
+            console.log("Backend response:", data);
+
+            stock.ltp = parseFloat(data.ltp ?? 0);
+            console.log(`Assigned LTP for ${symbol}:`, stock.ltp);
+
         } catch (err) {
-            console.error("Error fetching LTP for", stock.name, err);
+            console.error("Error fetching LTP for", symbol, err);
+            stock.ltp = 0;
         }
     }
     displayStocks();
