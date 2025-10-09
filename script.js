@@ -42,25 +42,39 @@ function displayStocks() {
         currentValue += amount; totalPL += profitLoss; currentInvestment += investment; totalProfitLoss += profitLoss;
 
         const row = document.createElement("tr");
+        row.setAttribute("data-index", i);
         row.innerHTML = `
             <td>${stock.name}</td>
             <td contenteditable="true" oninput="updateStock(${i}, 'quantity', this.textContent)">${stock.quantity}</td>
             <td contenteditable="true" oninput="updateStock(${i}, 'wacc', this.textContent)">${stock.wacc}</td>
-            <td>${stock.ltp}</td>
-            <td>${amount.toFixed(2)}</td>
-            <td class="${profitLoss >= 0 ? 'profit' : 'loss'}">${profitLoss.toFixed(2)}</td>
-            <td class="${profitLoss >= 0 ? 'profit' : 'loss'}">${plPercent.toFixed(2)}%</td>
+            <td class="ltp-cell">${stock.ltp}</td>
+            <td class="amount-cell">${amount.toFixed(2)}</td>
+            <td class="pl-cell ${profitLoss >= 0 ? 'profit' : 'loss'}">${profitLoss.toFixed(2)}</td>
+            <td class="pl-percent-cell ${profitLoss >= 0 ? 'profit' : 'loss'}">${plPercent.toFixed(2)}%</td>
             <td><button class="delete-btn" onclick="deleteStock(${i})">Delete</button></td>
         `;
         stockList.appendChild(row);
+    });
+
+    updateSummary();
+    saveStocks();
+}
+
+function updateSummary() {
+    let currentValue = 0, totalPL = 0, currentInvestment = 0, totalProfitLoss = 0;
+
+    stocks.forEach(stock => {
+        const amount = stock.ltp * stock.quantity;
+        const profitLoss = (stock.ltp - stock.wacc) * stock.quantity;
+        const investment = stock.wacc * stock.quantity;
+
+        currentValue += amount; totalPL += profitLoss; currentInvestment += investment; totalProfitLoss += profitLoss;
     });
 
     document.getElementById("currentValue").textContent = currentValue.toFixed(2);
     document.getElementById("totalPL").textContent = totalPL.toFixed(2);
     document.getElementById("currentInvestment").textContent = currentInvestment.toFixed(2);
     document.getElementById("totalProfitLoss").textContent = totalProfitLoss.toFixed(2);
-
-    saveStocks();
 }
 
 function updateStock(i, field, value) {
@@ -81,24 +95,32 @@ function sortStocks(field) {
     displayStocks();
 }
 
-async function fetchLiveLTPForStock(symbol) {
-    const name = symbol.toUpperCase();
-    try {
-        const resp = await fetch(`https://nepse-live-backend-1.onrender.com/api/ltp?symbol=${name}`);
-        if (!resp.ok) throw new Error("Network response was not ok");
-        const data = await resp.json();
-        console.log(name, "backend returned:", data);
+// 🔹 Fetch all LTPs in one call
+async function fetchAllLTPs() {
+    if (!stocks.length) return;
 
-        const index = stocks.findIndex(s => s.name === name);
-        if (index !== -1) {
-            stocks[index].ltp = parseFloat(data.ltp ?? 0); // update array directly
-        }
-        displayStocks(); // **call displayStocks after updating LTP**
+    const symbols = stocks.map(s => s.name).join(",");
+    try {
+        const resp = await fetch(`${BACKEND_URL}/api/ltp-multi?symbols=${symbols}`);
+        if (!resp.ok) throw new Error("Network response not ok");
+        const data = await resp.json();
+
+        data.forEach(item => {
+            const index = stocks.findIndex(s => s.name === item.symbol);
+            if (index !== -1) {
+                stocks[index].ltp = parseFloat(item.ltp ?? 0);
+            }
+        });
+
+        displayStocks(); // refresh table after updating all LTPs
     } catch (err) {
-        console.error("Error fetching LTP for", name, err);
+        console.error("Error fetching all LTPs", err);
     }
 }
-// Fetch LTP for all stocks every 5 seconds
-setInterval(() => {
-    stocks.forEach(stock => fetchLiveLTPForStock(stock.name));
-}, 5000);
+
+// 🔹 Refresh every 5 seconds
+setInterval(fetchAllLTPs, 5000);
+
+// 🔹 Initial display
+displayStocks();
+fetchAllLTPs();
