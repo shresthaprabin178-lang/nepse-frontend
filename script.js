@@ -1,7 +1,4 @@
-let stocks = JSON.parse(localStorage.getItem('stocks'))?.map(s => ({
-    ...s,
-    name: s.name.toUpperCase()
-})) || [];
+let stocks = JSON.parse(localStorage.getItem('stocks')) || [];
 
 function saveStocks() {
     localStorage.setItem('stocks', JSON.stringify(stocks));
@@ -21,6 +18,7 @@ function addStock() {
     clearInputs();
     saveStocks();
     displayStocks();
+    fetchLiveLTPForStock(name); // fetch LTP immediately for new stock
 }
 
 function clearInputs() {
@@ -86,32 +84,31 @@ function sortStocks(field) {
     displayStocks();
 }
 
-// Fetch live LTP from backend (Render URL)
+// Fetch live LTP for all stocks
 async function fetchLiveLTP() {
     for (let stock of stocks) {
-        const symbol = stock.name.toUpperCase();
-        console.log("Fetching LTP for symbol:", symbol);
-
-        try {
-            const resp = await fetch(`https://nepse-live-backend-1.onrender.com/api/ltp?symbol=${symbol}`);
-            if (!resp.ok) {
-                console.error("Response not OK for", symbol, resp.status);
-                stock.ltp = 0;
-                continue;
-            }
-
-            const data = await resp.json();
-            console.log("Backend response:", data);
-
-            stock.ltp = parseFloat(data.ltp ?? 0);
-            console.log(`Assigned LTP for ${symbol}:`, stock.ltp);
-
-        } catch (err) {
-            console.error("Error fetching LTP for", symbol, err);
-            stock.ltp = 0;
-        }
+        await fetchLiveLTPForStock(stock.name, stock);
     }
     displayStocks();
+}
+
+// Fetch live LTP for a single stock
+async function fetchLiveLTPForStock(symbol, stockObj = null) {
+    const name = symbol.toUpperCase();
+    try {
+        const resp = await fetch(`https://nepse-live-backend-1.onrender.com/api/ltp?symbol=${name}`);
+        if (!resp.ok) throw new Error("Network response was not ok");
+        const data = await resp.json();
+        console.log(name, "backend returned:", data);
+        const ltpValue = parseFloat(data.ltp ?? 0);
+        if (stockObj) stockObj.ltp = ltpValue;
+        else {
+            const index = stocks.findIndex(s => s.name === name);
+            if (index !== -1) stocks[index].ltp = ltpValue;
+        }
+    } catch (err) {
+        console.error("Error fetching LTP for", name, err);
+    }
 }
 
 // Update every 5 sec
