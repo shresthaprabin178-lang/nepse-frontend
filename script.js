@@ -81,29 +81,24 @@ function sortStocks(field) {
     displayStocks();
 }
 
-// Fetch live LTP from backend
-async function fetchLiveLTP() {
-    for (let stock of stocks) {
-        const symbol = stock.name.toUpperCase();
-        console.log("Fetching LTP for symbol:", symbol);
+async function fetchLiveLTPForStock(symbol) {
+    const name = symbol.toUpperCase();
+    try {
+        const resp = await fetch(`https://nepse-live-backend-1.onrender.com/api/ltp?symbol=${name}`);
+        if (!resp.ok) throw new Error("Network response was not ok");
+        const data = await resp.json();
+        console.log(name, "backend returned:", data);
 
-        try {
-            const resp = await fetch(`https://nepse-live-backend-1.onrender.com/api/ltp?symbol=${symbol}`);
-            if (!resp.ok) {
-                console.error("Response not OK for", symbol, resp.status);
-                continue;
-            }
-
-            const data = await resp.json();
-            console.log("Backend response:", data);
-
-            stock.ltp = parseFloat(data.ltp ?? 0);
-            console.log(`Assigned LTP for ${symbol}:`, stock.ltp);
-
-        } catch (err) {
-            console.error("Error fetching LTP for", symbol, err);
+        const index = stocks.findIndex(s => s.name === name);
+        if (index !== -1) {
+            stocks[index].ltp = parseFloat(data.ltp ?? 0); // update array directly
         }
+        displayStocks(); // **call displayStocks after updating LTP**
+    } catch (err) {
+        console.error("Error fetching LTP for", name, err);
     }
-    displayStocks();
 }
-
+// Fetch LTP for all stocks every 5 seconds
+setInterval(() => {
+    stocks.forEach(stock => fetchLiveLTPForStock(stock.name));
+}, 5000);
