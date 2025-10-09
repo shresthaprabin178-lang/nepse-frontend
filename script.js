@@ -84,21 +84,26 @@ function sortStocks(field) {
 // Fetch live LTP from backend
 async function fetchLiveLTP() {
     for (let stock of stocks) {
+        const symbol = stock.name.toUpperCase();
+        console.log("Fetching LTP for symbol:", symbol);
+
         try {
-            const resp = await fetch(`${BACKEND_URL}/api/ltp?symbol=${stock.name}`);
-            if (!resp.ok) continue;
+            const resp = await fetch(`https://nepse-live-backend-1.onrender.com/api/ltp?symbol=${symbol}`);
+            if (!resp.ok) {
+                console.error("Response not OK for", symbol, resp.status);
+                continue;
+            }
+
             const data = await resp.json();
-            // Ensure symbol name is uppercase and handle possible string/number
-            stock.ltp = parseFloat(data.ltp ?? data.LTP ?? 0);
-            console.log(`Fetched LTP for ${stock.name}:`, stock.ltp);
+            console.log("Backend response:", data);
+
+            stock.ltp = parseFloat(data.ltp ?? 0);
+            console.log(`Assigned LTP for ${symbol}:`, stock.ltp);
+
         } catch (err) {
-            console.error("Error fetching LTP for", stock.name, err);
+            console.error("Error fetching LTP for", symbol, err);
         }
     }
     displayStocks();
 }
 
-// Update every 5 sec
-setInterval(fetchLiveLTP, 5000);
-
-displayStocks();
