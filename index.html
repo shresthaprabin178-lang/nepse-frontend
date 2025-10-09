@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEPSE Portfolio Tracker</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="container">
+    <h1>NEPSE Portfolio Tracker</h1>
+    <div class="stock-form">
+        <input type="text" id="stockName" placeholder="Stock Symbol (e.g. NABIL)">
+        <input type="number" id="quantity" placeholder="Quantity">
+        <input type="number" id="wacc" placeholder="WACC Price">
+        <button onclick="addStock()">Add Stock</button>
+    </div>
+
+    <div class="sort-buttons">
+        <button onclick="sortStocks('name')">Sort by Name</button>
+        <button onclick="sortStocks('profitLoss')">Sort by Profit/Loss</button>
+    </div>
+
+    <table id="stockTable">
+        <thead>
+            <tr>
+                <th>Stock</th>
+                <th>Quantity</th>
+                <th>WACC</th>
+                <th>LTP</th>
+                <th>Amount</th>
+                <th>Profit/Loss</th>
+                <th>Profit/Loss %</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody id="stockList"></tbody>
+        <tfoot>
+            <tr>
+                <td colspan="4"><strong>Current Value</strong></td>
+                <td id="currentValue">0</td>
+                <td id="totalPL">0</td>
+                <td></td>
+                <td></td>
+            </tr>
+            <tr>
+                <td colspan="4"><strong>Current Investment</strong></td>
+                <td id="currentInvestment">0</td>
+                <td id="totalProfitLoss">0</td>
+                <td></td>
+                <td></td>
+            </tr>
+        </tfoot>
+    </table>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
