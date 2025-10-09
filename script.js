@@ -88,7 +88,9 @@ async function fetchLiveLTP() {
             const resp = await fetch(`${BACKEND_URL}/api/ltp?symbol=${stock.name}`);
             if (!resp.ok) continue;
             const data = await resp.json();
-            stock.ltp = parseFloat(data.ltp) || 0;
+            // Ensure symbol name is uppercase and handle possible string/number
+            stock.ltp = parseFloat(data.ltp ?? data.LTP ?? 0);
+            console.log(`Fetched LTP for ${stock.name}:`, stock.ltp);    
         } catch (err) {
             console.error("Error fetching LTP for", stock.name, err);
         }
