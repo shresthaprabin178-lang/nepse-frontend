@@ -91,12 +91,16 @@ async function fetchAllLTPs() {
         const resp = await fetch(`${BACKEND_URL}/api/ltp-multi?symbols=${symbols}`);
         if (!resp.ok) throw new Error("Network response not ok");
         const data = await resp.json();
+        console.log("Backend returned:", data); // 🔹 debug log
 
         data.forEach(item => {
-            const index = stocks.findIndex(s => s.name === item.symbol);
+            const symbol = item.symbol.toUpperCase().trim();
+            const index = stocks.findIndex(s => s.name === symbol);
             if (index !== -1) {
-                stocks[index].ltp = parseFloat(item.ltp ?? 0);
-                updateRow(index); // update only this row
+                // 🔹 parse LTP safely
+                const ltp = Number(item.ltp);
+                stocks[index].ltp = isNaN(ltp) ? 0 : ltp;
+                updateRow(index);
             }
         });
         updateSummary();
