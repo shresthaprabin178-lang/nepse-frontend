@@ -31,16 +31,7 @@ function displayStocks() {
     const stockList = document.getElementById("stockList");
     stockList.innerHTML = "";
 
-    let currentValue = 0, totalPL = 0, currentInvestment = 0, totalProfitLoss = 0;
-
     stocks.forEach((stock, i) => {
-        const amount = stock.ltp * stock.quantity;
-        const profitLoss = (stock.ltp - stock.wacc) * stock.quantity;
-        const plPercent = stock.wacc > 0 ? ((stock.ltp - stock.wacc) / stock.wacc) * 100 : 0;
-        const investment = stock.wacc * stock.quantity;
-
-        currentValue += amount; totalPL += profitLoss; currentInvestment += investment; totalProfitLoss += profitLoss;
-
         const row = document.createElement("tr");
         row.setAttribute("data-index", i);
         row.innerHTML = `
@@ -48,40 +39,43 @@ function displayStocks() {
             <td contenteditable="true" oninput="updateStock(${i}, 'quantity', this.textContent)">${stock.quantity}</td>
             <td contenteditable="true" oninput="updateStock(${i}, 'wacc', this.textContent)">${stock.wacc}</td>
             <td class="ltp-cell">${stock.ltp}</td>
-            <td class="amount-cell">${amount.toFixed(2)}</td>
-            <td class="pl-cell ${profitLoss >= 0 ? 'profit' : 'loss'}">${profitLoss.toFixed(2)}</td>
-            <td class="pl-percent-cell ${profitLoss >= 0 ? 'profit' : 'loss'}">${plPercent.toFixed(2)}%</td>
+            <td class="amount-cell">${(stock.ltp * stock.quantity).toFixed(2)}</td>
+            <td class="pl-cell ${(stock.ltp - stock.wacc) * stock.quantity >= 0 ? 'profit' : 'loss'}">${((stock.ltp - stock.wacc) * stock.quantity).toFixed(2)}</td>
+            <td class="pl-percent-cell ${(stock.ltp - stock.wacc) * stock.quantity >= 0 ? 'profit' : 'loss'}">${stock.wacc > 0 ? (((stock.ltp - stock.wacc)/stock.wacc)*100).toFixed(2) : 0}%</td>
             <td><button class="delete-btn" onclick="deleteStock(${i})">Delete</button></td>
         `;
         stockList.appendChild(row);
     });
 
     updateSummary();
-    saveStocks();
 }
 
 function updateSummary() {
     let currentValue = 0, totalPL = 0, currentInvestment = 0, totalProfitLoss = 0;
-
     stocks.forEach(stock => {
         const amount = stock.ltp * stock.quantity;
         const profitLoss = (stock.ltp - stock.wacc) * stock.quantity;
         const investment = stock.wacc * stock.quantity;
 
-        currentValue += amount; totalPL += profitLoss; currentInvestment += investment; totalProfitLoss += profitLoss;
+        currentValue += amount;
+        totalPL += profitLoss;
+        currentInvestment += investment;
+        totalProfitLoss += profitLoss;
     });
 
     document.getElementById("currentValue").textContent = currentValue.toFixed(2);
     document.getElementById("totalPL").textContent = totalPL.toFixed(2);
     document.getElementById("currentInvestment").textContent = currentInvestment.toFixed(2);
     document.getElementById("totalProfitLoss").textContent = totalProfitLoss.toFixed(2);
+
+    saveStocks();
 }
 
 function updateStock(i, field, value) {
     const val = parseFloat(value);
     if (isNaN(val) || val < 0) return;
     stocks[i][field] = val;
-    displayStocks();
+    updateRow(i);
 }
 
 function deleteStock(i) {
@@ -89,16 +83,9 @@ function deleteStock(i) {
     displayStocks();
 }
 
-function sortStocks(field) {
-    if (field === 'name') stocks.sort((a, b) => a.name.localeCompare(b.name));
-    else if (field === 'profitLoss') stocks.sort((a, b) => ((b.ltp - b.wacc) * b.quantity) - ((a.ltp - a.wacc) * a.quantity));
-    displayStocks();
-}
-
-// 🔹 Fetch all LTPs in one call
+// 🔹 Only update LTP cells without replacing table
 async function fetchAllLTPs() {
     if (!stocks.length) return;
-
     const symbols = stocks.map(s => s.name).join(",");
     try {
         const resp = await fetch(`${BACKEND_URL}/api/ltp-multi?symbols=${symbols}`);
@@ -109,13 +96,30 @@ async function fetchAllLTPs() {
             const index = stocks.findIndex(s => s.name === item.symbol);
             if (index !== -1) {
                 stocks[index].ltp = parseFloat(item.ltp ?? 0);
+                updateRow(index); // update only this row
             }
         });
-
-        displayStocks(); // refresh table after updating all LTPs
+        updateSummary();
+        saveStocks();
     } catch (err) {
-        console.error("Error fetching all LTPs", err);
+        console.error("Error fetching LTPs", err);
     }
+}
+
+// 🔹 Update only a single row (non-destructive)
+function updateRow(i) {
+    const row = document.querySelector(`tr[data-index="${i}"]`);
+    if (!row) return;
+
+    const stock = stocks[i];
+    row.querySelector(".ltp-cell").textContent = stock.ltp;
+    row.querySelector(".amount-cell").textContent = (stock.ltp * stock.quantity).toFixed(2);
+    const profitLoss = (stock.ltp - stock.wacc) * stock.quantity;
+    row.querySelector(".pl-cell").textContent = profitLoss.toFixed(2);
+    row.querySelector(".pl-cell").className = `pl-cell ${profitLoss >= 0 ? 'profit' : 'loss'}`;
+    const plPercent = stock.wacc > 0 ? ((stock.ltp - stock.wacc)/stock.wacc)*100 : 0;
+    row.querySelector(".pl-percent-cell").textContent = plPercent.toFixed(2) + "%";
+    row.querySelector(".pl-percent-cell").className = `pl-percent-cell ${profitLoss >= 0 ? 'profit' : 'loss'}`;
 }
 
 // 🔹 Refresh every 5 seconds
