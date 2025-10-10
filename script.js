@@ -125,7 +125,6 @@ function updateLTPCell(index, ltp) {
     
     // No need to touch Target Price (5), Stop Loss (6), or Action (9)
 }
-
 // Fetch LTP for all stocks from backend
 async function fetchAllLTPs() {
     if (!stocks.length) return;
@@ -143,22 +142,37 @@ async function fetchAllLTPs() {
             // === Check for notifications ===
             const target = parseFloat(stocks[i].target);
             const stopLoss = parseFloat(stocks[i].stopLoss);
+            
+            let notified = false; // Use a temporary flag to track if any action was taken
+
+            // Target Notification Logic
             if (!isNaN(target) && ltp >= target && !stocks[i].targetNotified) {
                 showNotification(`🎯 ${symbol}`, `Target reached at Rs. ${ltp}`);
                 stocks[i].targetNotified = true;
                 stocks[i].stopNotified = false;
-            }   
+                notified = true; // Flag that state was changed
+            }   
+            
+            // Stop Loss Notification Logic
             if (!isNaN(stopLoss) && ltp <= stopLoss && !stocks[i].stopNotified) {
                 showNotification(`⚠️ ${symbol}`, `Stop loss triggered at Rs. ${ltp}`);
                 stocks[i].stopNotified = true;
                 stocks[i].targetNotified = false;
+                notified = true; // Flag that state was changed
             } 
+            
+            // CRITICAL FIX: Save the updated flags to local storage immediately
+            if (notified) {
+                saveStocks(); 
+            }
+            
         } catch (err) {
             console.error("Error fetching LTP for", symbol, err);
         }
     }
 
-    saveStocks();
+    // You can remove the old saveStocks() call from here, as it's now done inside the loop
+    // saveStocks(); // <-- REMOVE THIS LINE IF IT WAS OUTSIDE THE LOOP
 }
 // --- Manual Notification Function ---
 function pushNotification() {
