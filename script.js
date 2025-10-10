@@ -32,7 +32,7 @@ function addStock() {
         return;
     }
 
-    stocks.push({ name, quantity, wacc, target: 0, stopLoss: 0, ltp: 0 });
+    stocks.push({ name, quantity, wacc, target: 0, stopLoss: 0, ltp: 0, targetNotified: false, stopNotified: false });
     clearInputs();
     displayStocks();
     saveStocks();
@@ -96,13 +96,20 @@ function displayStocks() {
 function updateStock(i, field, value) {
     const val = parseFloat(value);
     if (isNaN(val) || val < 0) return;
+    
+    // CRITICAL FIX: Reset notification flags when target or stopLoss is changed
+    if (field === 'target' || field === 'stopLoss') {
+        stocks[i].targetNotified = false;
+        stocks[i].stopNotified = false;
+    }
+    
     stocks[i][field] = val;
     saveStocks();
 }
-
 function deleteStock(i) {
     stocks.splice(i, 1);
     displayStocks();
+    saveStocks();
 }
 
 function sortStocks(field) {
@@ -165,21 +172,17 @@ async function fetchAllLTPs() {
             
             let notified = false; // Use a temporary flag to track if any action was taken
 
-            // Target Notification Logic
-            if (!isNaN(target) && target>0 && ltp >= target && !stocks[i].targetNotified) {
+            if (!isNaN(target) && target > 0 && ltp >= target && !stocks[i].targetNotified) {
                 showNotification(`🎯 ${symbol}`, `Target reached at Rs. ${ltp}`);
                 stocks[i].targetNotified = true;
-                stocks[i].stopNotified = false;
-                notified = true; // Flag that state was changed
-            }   
-            
-            // Stop Loss Notification Logic
+                notified = true;
+            }   
+
             if (!isNaN(stopLoss) && stopLoss > 0 && ltp <= stopLoss && !stocks[i].stopNotified) {
                 showNotification(`⚠️ ${symbol}`, `Stop loss triggered at Rs. ${ltp}`);
                 stocks[i].stopNotified = true;
-                stocks[i].targetNotified = false;
-                notified = true; // Flag that state was changed
-            } 
+                notified = true;
+            }
             
             // CRITICAL FIX: Save the updated flags to local storage immediately
             if (notified) {
@@ -194,10 +197,15 @@ async function fetchAllLTPs() {
     // You can remove the old saveStocks() call from here, as it's now done inside the loop
     // saveStocks(); // <-- REMOVE THIS LINE IF IT WAS OUTSIDE THE LOOP
 }
-// --- Manual Notification Function ---
 async function pushNotification() {
-   await fetchAllLTPs();
-   saveStocks();
+    // Reset all notification flags
+    stocks.forEach(stock => {
+        stock.targetNotified = false;
+        stock.stopNotified = false;
+    });
+    
+    await fetchAllLTPs();
+    saveStocks();
 }
 // Initial display
 displayStocks();
