@@ -77,8 +77,9 @@ function displayStocks() {
         currentValue += amount; totalPL += profitLoss; currentInvestment += investment; totalProfitLoss += profitLoss;
 
         const row = document.createElement("tr");
+        // FIX: The row.innerHTML is now CORRECTLY ordered and uses onblur
         row.innerHTML = `
-            <td>${stock.name}</td>                                                                               <td contenteditable="true" oninput="updateStock(${i}, 'quantity', this.textContent)">${stock.quantity}</td>    <td contenteditable="true" oninput="updateStock(${i}, 'wacc', this.textContent)">${stock.wacc}</td>           <td>${stock.ltp.toFixed(2)}</td>                                                                    <td>${amount.toFixed(2)}</td>                                                                       <td contenteditable="true" oninput="updateStock(${i}, 'target', this.textContent)">${stock.target || 0}</td>  <td contenteditable="true" oninput="updateStock(${i}, 'stopLoss', this.textContent)">${stock.stopLoss || 0}</td><td class="${profitLoss >= 0 ? 'profit' : 'loss'}">${profitLoss.toFixed(2)}</td>                    <td class="${profitLoss >= 0 ? 'profit' : 'loss'}">${plPercent.toFixed(2)}%</td>                    <td><button class="delete-btn" onclick="deleteStock(${i})">Delete</button></td>                      `;
+            <td>${stock.name}</td>                                                                               <td contenteditable="true" onblur="updateStock(${i}, 'quantity', this.textContent)">${stock.quantity}</td>    <td contenteditable="true" onblur="updateStock(${i}, 'wacc', this.textContent)">${stock.wacc}</td>           <td>${stock.ltp.toFixed(2)}</td>                                                                    <td>${amount.toFixed(2)}</td>                                                                       <td contenteditable="true" onblur="updateStock(${i}, 'target', this.textContent)">${stock.target || 0}</td>  <td contenteditable="true" onblur="updateStock(${i}, 'stopLoss', this.textContent)">${stock.stopLoss || 0}</td><td class="${profitLoss >= 0 ? 'profit' : 'loss'}">${profitLoss.toFixed(2)}</td>                    <td class="${profitLoss >= 0 ? 'profit' : 'loss'}">${plPercent.toFixed(2)}%</td>                    <td><button class="delete-btn" onclick="deleteStock(${i})">Delete</button></td>                      `;
 
         stockList.appendChild(row);
     });
@@ -96,7 +97,7 @@ function updateStock(i, field, value) {
     const val = parseFloat(value);
     if (isNaN(val) || val < 0) return;
     stocks[i][field] = val;
-    displayStocks();
+    saveStocks();
 }
 
 function deleteStock(i) {
@@ -165,7 +166,7 @@ async function fetchAllLTPs() {
             let notified = false; // Use a temporary flag to track if any action was taken
 
             // Target Notification Logic
-            if (!isNaN(target) && ltp >= target && !stocks[i].targetNotified) {
+            if (!isNaN(target) && target>0 && ltp >= target && !stocks[i].targetNotified) {
                 showNotification(`🎯 ${symbol}`, `Target reached at Rs. ${ltp}`);
                 stocks[i].targetNotified = true;
                 stocks[i].stopNotified = false;
@@ -173,7 +174,7 @@ async function fetchAllLTPs() {
             }   
             
             // Stop Loss Notification Logic
-            if (!isNaN(stopLoss) && ltp <= stopLoss && !stocks[i].stopNotified) {
+            if (!isNaN(stopLoss) && stopLoss > 0 && ltp <= stopLoss && !stocks[i].stopNotified) {
                 showNotification(`⚠️ ${symbol}`, `Stop loss triggered at Rs. ${ltp}`);
                 stocks[i].stopNotified = true;
                 stocks[i].targetNotified = false;
@@ -194,8 +195,8 @@ async function fetchAllLTPs() {
     // saveStocks(); // <-- REMOVE THIS LINE IF IT WAS OUTSIDE THE LOOP
 }
 // --- Manual Notification Function ---
-function pushNotification() {
-   fetchAllLTPs();
+async function pushNotification() {
+   await fetchAllLTPs();
    saveStocks();
 }
 // Initial display
