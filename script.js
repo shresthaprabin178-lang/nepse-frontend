@@ -1,10 +1,27 @@
+// Request permission for desktop notifications
+if (Notification.permission !== "granted") {
+    Notification.requestPermission().then(permission => {
+        if (permission === "granted") {
+            console.log("✅ Notification permission granted.");
+        } else {
+            console.log("❌ Notification permission denied.");
+        }
+    });
+}
 let stocks = JSON.parse(localStorage.getItem('stocks')) || [];
 const BACKEND_URL = "https://nepse-live-backend-1.onrender.com";
 
 function saveStocks() {
     localStorage.setItem('stocks', JSON.stringify(stocks));
 }
-
+function showNotification(title, message) {
+    if (Notification.permission === "granted") {
+        new Notification(title, { 
+            body: message, 
+            icon: "https://upload.wikimedia.org/wikipedia/commons/7/7e/NEPSE_Logo.png" 
+        });
+    }
+}
 function addStock() {
     let name = document.getElementById("stockName").value.toUpperCase().trim();
     const quantity = parseFloat(document.getElementById("quantity").value);
@@ -15,7 +32,7 @@ function addStock() {
         return;
     }
 
-    stocks.push({ name, quantity, wacc, ltp: 0 });
+    stocks.push({ name, quantity, wacc, target: 0, stopLoss: 0, ltp: 0 });
     clearInputs();
     displayStocks();
     saveStocks();
@@ -46,12 +63,15 @@ function displayStocks() {
             <td>${stock.name}</td>
             <td contenteditable="true" oninput="updateStock(${i}, 'quantity', this.textContent)">${stock.quantity}</td>
             <td contenteditable="true" oninput="updateStock(${i}, 'wacc', this.textContent)">${stock.wacc}</td>
+            <td contenteditable="true" oninput="updateStock(${i}, 'target', this.textContent)">${stock.target || 0}</td>
+            <td contenteditable="true" oninput="updateStock(${i}, 'stopLoss', this.textContent)">${stock.stopLoss || 0}</td>
             <td>${stock.ltp.toFixed(2)}</td>
             <td>${amount.toFixed(2)}</td>
             <td class="${profitLoss >= 0 ? 'profit' : 'loss'}">${profitLoss.toFixed(2)}</td>
             <td class="${profitLoss >= 0 ? 'profit' : 'loss'}">${plPercent.toFixed(2)}%</td>
             <td><button class="delete-btn" onclick="deleteStock(${i})">Delete</button></td>
         `;
+
         stockList.appendChild(row);
     });
 
@@ -115,6 +135,20 @@ async function fetchAllLTPs() {
             const ltp = Number(data.ltp) || 0;
             stocks[i].ltp = ltp;
             updateLTPCell(i, ltp);
+
+            // === Check for notifications ===
+            const target = parseFloat(stocks[i].target);
+            const stopLoss = parseFloat(stocks[i].stopLoss);
+            if (!isNaN(target) && ltp >= target && !stocks[i].targetNotified) {
+                showNotification(`🎯 ${symbol}`, `Target reached at Rs. ${ltp}`);
+                stocks[i].targetNotified = true;
+                stocks[i].stopNotified = false;
+            }   
+            if (!isNaN(stopLoss) && ltp <= stopLoss && !stocks[i].stopNotified) {
+                showNotification(`⚠️ ${symbol}`, `Stop loss triggered at Rs. ${ltp}`);
+                stocks[i].stopNotified = true;
+                stocks[i].targetNotified = false;
+            } 
         } catch (err) {
             console.error("Error fetching LTP for", symbol, err);
         }
