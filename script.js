@@ -177,6 +177,7 @@ async function fetchAllLTPs() {
 // --- Manual Notification Function ---
 function pushNotification() {
    fetchAllLTPs();
+   saveStocks();
 }
 // Initial display
 displayStocks();
