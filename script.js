@@ -37,7 +37,26 @@ function addStock() {
     displayStocks();
     saveStocks();
 }
+// --- Clear Cache Function ---
+function clearCache() {
+    // 1. Confirm with the user before deleting data
+    const confirmClear = confirm("Are you sure you want to clear all stored stock data? This action cannot be undone.");
 
+    if (confirmClear) {
+        // 2. Remove the 'stocks' item from the browser's Local Storage
+        localStorage.removeItem('stocks');
+
+        // 3. Optional: You could remove all items if you're sure nothing else is being stored
+        // localStorage.clear(); 
+        
+        console.log("✅ Local storage for 'stocks' has been cleared.");
+
+        // 4. Reload the page to reset the application state and display an empty table
+        window.location.reload();
+    } else {
+        console.log("❌ Clear cache cancelled.");
+    }
+}
 function clearInputs() {
     document.getElementById("stockName").value = "";
     document.getElementById("quantity").value = "";
