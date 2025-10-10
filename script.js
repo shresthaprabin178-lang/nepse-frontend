@@ -176,18 +176,7 @@ async function fetchAllLTPs() {
 }
 // --- Manual Notification Function ---
 function pushNotification() {
-    // Check if there are any stocks to use for the test data
-    if (stocks.length > 0) {
-        const testStock = stocks[0]; // Use the first stock for a realistic test
-        const title = `Manual Alert: ${testStock.name}`;
-        const message = `This is a manual push notification test for the price Rs. ${testStock.ltp.toFixed(2)}.`;
-        
-        // Call the main showNotification function directly
-        showNotification(title, message);
-    } else {
-        // Fallback notification if no stocks are added yet
-        showNotification("Manual Test", "This is a general push notification test.");
-    }
+   fetchAllLTPs();
 }
 // Initial display
 displayStocks();
