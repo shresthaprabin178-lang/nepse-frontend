@@ -43,7 +43,6 @@ function clearInputs() {
     document.getElementById("quantity").value = "";
     document.getElementById("wacc").value = "";
 }
-
 function displayStocks() {
     const stockList = document.getElementById("stockList");
     stockList.innerHTML = "";
@@ -60,17 +59,7 @@ function displayStocks() {
 
         const row = document.createElement("tr");
         row.innerHTML = `
-            <td>${stock.name}</td>
-            <td contenteditable="true" oninput="updateStock(${i}, 'quantity', this.textContent)">${stock.quantity}</td>
-            <td contenteditable="true" oninput="updateStock(${i}, 'wacc', this.textContent)">${stock.wacc}</td>
-            <td contenteditable="true" oninput="updateStock(${i}, 'target', this.textContent)">${stock.target || 0}</td>
-            <td contenteditable="true" oninput="updateStock(${i}, 'stopLoss', this.textContent)">${stock.stopLoss || 0}</td>
-            <td>${stock.ltp.toFixed(2)}</td>
-            <td>${amount.toFixed(2)}</td>
-            <td class="${profitLoss >= 0 ? 'profit' : 'loss'}">${profitLoss.toFixed(2)}</td>
-            <td class="${profitLoss >= 0 ? 'profit' : 'loss'}">${plPercent.toFixed(2)}%</td>
-            <td><button class="delete-btn" onclick="deleteStock(${i})">Delete</button></td>
-        `;
+            <td>${stock.name}</td>                                                                               <td contenteditable="true" oninput="updateStock(${i}, 'quantity', this.textContent)">${stock.quantity}</td>    <td contenteditable="true" oninput="updateStock(${i}, 'wacc', this.textContent)">${stock.wacc}</td>           <td>${stock.ltp.toFixed(2)}</td>                                                                    <td>${amount.toFixed(2)}</td>                                                                       <td contenteditable="true" oninput="updateStock(${i}, 'target', this.textContent)">${stock.target || 0}</td>  <td contenteditable="true" oninput="updateStock(${i}, 'stopLoss', this.textContent)">${stock.stopLoss || 0}</td><td class="${profitLoss >= 0 ? 'profit' : 'loss'}">${profitLoss.toFixed(2)}</td>                    <td class="${profitLoss >= 0 ? 'profit' : 'loss'}">${plPercent.toFixed(2)}%</td>                    <td><button class="delete-btn" onclick="deleteStock(${i})">Delete</button></td>                      `;
 
         stockList.appendChild(row);
     });
@@ -79,6 +68,9 @@ function displayStocks() {
     document.getElementById("totalPL").textContent = totalPL.toFixed(2);
     document.getElementById("currentInvestment").textContent = currentInvestment.toFixed(2);
     document.getElementById("totalProfitLoss").textContent = totalProfitLoss.toFixed(2);
+    
+    // Save stocks after display is done
+    saveStocks(); 
 }
 
 function updateStock(i, field, value) {
@@ -102,24 +94,36 @@ function sortStocks(field) {
 // --- LTP Handling ---
 
 // Update only the LTP column and dependent columns for one row
+// Update only the LTP column and dependent columns for one row
 function updateLTPCell(index, ltp) {
     const stockList = document.getElementById("stockList");
     const row = stockList.children[index];
     if (!row) return;
 
+    // The LTP column in the HTML (index 3)
     row.cells[3].textContent = ltp.toFixed(2);
 
+    // Get WACC (index 2) and Quantity (index 1) to calculate new values
     const quantity = parseFloat(row.cells[1].textContent);
     const wacc = parseFloat(row.cells[2].textContent);
+    
+    // CALCULATIONS
     const amount = ltp * quantity;
     const profitLoss = (ltp - wacc) * quantity;
     const plPercent = wacc > 0 ? ((ltp - wacc) / wacc) * 100 : 0;
+    
+    // Update the other dependent cells based on the 10-column structure:
+    row.cells[4].textContent = amount.toFixed(2); // Amount (index 4)
 
-    row.cells[4].textContent = amount.toFixed(2);
-    row.cells[5].textContent = profitLoss.toFixed(2);
-    row.cells[5].className = profitLoss >= 0 ? 'profit' : 'loss';
-    row.cells[6].textContent = plPercent.toFixed(2) + "%";
-    row.cells[6].className = profitLoss >= 0 ? 'profit' : 'loss';
+    // Profit/Loss (index 7)
+    row.cells[7].textContent = profitLoss.toFixed(2);
+    row.cells[7].className = profitLoss >= 0 ? 'profit' : 'loss';
+    
+    // Profit/Loss % (index 8)
+    row.cells[8].textContent = plPercent.toFixed(2) + "%";
+    row.cells[8].className = profitLoss >= 0 ? 'profit' : 'loss';
+    
+    // No need to touch Target Price (5), Stop Loss (6), or Action (9)
 }
 
 // Fetch LTP for all stocks from backend
