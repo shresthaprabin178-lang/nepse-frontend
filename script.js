@@ -1,53 +1,137 @@
-let stocks = JSON.parse(localStorage.getItem('stocks')) || [];
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+// --- YOUR FIREBASE CONFIG ---
+const firebaseConfig = {
+  apiKey: "AIzaSyBowvP1x1od-RijlwT3gAoTzq5yiZ-faz4",
+  authDomain: "nepsetracker1.firebaseapp.com",
+  projectId: "nepsetracker1",
+  storageBucket: "nepsetracker1.firebasestorage.app",
+  messagingSenderId: "180767710295",
+  appId: "1:180767710295:web:71b87c8ae7cec69eb5d712",
+  measurementId: "G-L7GT9WQNED"
+};
+
+// Initialize
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const provider = new GoogleAuthProvider();
+
+let stocks = [];
+let currentUser = null;
 const BACKEND_URL = "https://nepse-live-backend-1.onrender.com";
 
-// Request Notifications
-if (Notification.permission !== "granted") {
-    Notification.requestPermission();
-}
-
-function saveStocks() {
-    localStorage.setItem('stocks', JSON.stringify(stocks));
-}
-
-function showNotification(title, message) {
-    if (Notification.permission === "granted") {
-        new Notification(title, { 
-            body: message, 
-            icon: "https://upload.wikimedia.org/wikipedia/commons/7/7e/NEPSE_Logo.png" 
-        });
+// --- CLOUD SYNC HELPERS ---
+async function saveToCloud() {
+    if (currentUser) {
+        try {
+            await setDoc(doc(db, "users", currentUser.uid), { stocks: stocks });
+        } catch (e) { console.error("Cloud Save Failed:", e); }
     }
 }
 
-function addStock() {
-    let name = document.getElementById("stockName").value.toUpperCase().trim();
-    const quantity = parseFloat(document.getElementById("quantity").value);
-    const wacc = parseFloat(document.getElementById("wacc").value);
-
-    if (!name || isNaN(quantity) || quantity <= 0 || isNaN(wacc) || wacc <= 0) {
-        alert("Enter valid symbol, quantity & WACC");
-        return;
+// --- AUTH FUNCTIONS ---
+window.handleLogin = async () => {
+    try { 
+        await signInWithPopup(auth, provider); 
+    } catch (e) { 
+        console.error("Login Error:", e);
+        alert("Login failed. Check your Firebase popup settings.");
     }
+};
 
-    stocks.push({ 
-        name, quantity, wacc, 
-        target: 0, stopLoss: 0, ltp: 0, 
-        targetNotified: false, stopNotified: false 
+window.handleLogout = () => {
+    signOut(auth).then(() => {
+        stocks = [];
+        window.location.reload();
     });
+};
+
+onAuthStateChanged(auth, async (user) => {
+    const loginBtn = document.getElementById("login-btn");
+    const userInfo = document.getElementById("user-info");
     
-    document.getElementById("stockName").value = "";
-    document.getElementById("quantity").value = "";
-    document.getElementById("wacc").value = "";
+    if (user) {
+        currentUser = user;
+        if(loginBtn) loginBtn.style.display = "none";
+        if(userInfo) userInfo.style.display = "flex";
+        document.getElementById("user-name").innerText = user.displayName;
+        document.getElementById("user-pic").src = user.photoURL;
+        
+        // Load existing cloud data
+        const docSnap = await getDoc(doc(db, "users", user.uid));
+        if (docSnap.exists()) {
+            stocks = docSnap.data().stocks || [];
+            displayStocks();
+            fetchAllLTPs();
+        }
+    } else {
+        currentUser = null;
+        if(loginBtn) loginBtn.style.display = "block";
+        if(userInfo) userInfo.style.display = "none";
+    }
+});
+
+// --- CORE PORTFOLIO FUNCTIONS ---
+window.addStock = async () => {
+    const nameInput = document.getElementById("stockName");
+    const qtyInput = document.getElementById("quantity");
+    const waccInput = document.getElementById("wacc");
+
+    const name = nameInput.value.toUpperCase().trim();
+    const qty = parseFloat(qtyInput.value);
+    const wacc = parseFloat(waccInput.value);
+
+    if (!currentUser) return alert("Please Login with Google first!");
+    if (!name || isNaN(qty) || isNaN(wacc)) return alert("Please fill all fields correctly!");
+
+    stocks.push({ name, quantity: qty, wacc, ltp: 0, target: 0, stopLoss: 0 });
+    
+    // Clear inputs
+    nameInput.value = ""; qtyInput.value = ""; waccInput.value = "";
     
     displayStocks();
-    saveStocks();
-    fetchAllLTPs(); // Immediate update for new stock
-}
+    await saveToCloud();
+    fetchAllLTPs();
+};
 
+window.deleteStock = async (i) => {
+    if(confirm("Permanently delete this from cloud?")) {
+        stocks.splice(i, 1);
+        displayStocks();
+        await saveToCloud();
+    }
+};
+
+window.updateStock = async (i, field, value) => {
+    const val = parseFloat(value);
+    if (!isNaN(val)) {
+        stocks[i][field] = val;
+        await saveToCloud();
+        displayStocks();
+    }
+};
+
+window.sortStocks = (field) => {
+    if (field === 'name') stocks.sort((a, b) => a.name.localeCompare(b.name));
+    else if (field === 'profitLoss') {
+        stocks.sort((a, b) => {
+            const plA = (a.ltp - a.wacc) * a.quantity;
+            const plB = (b.ltp - b.wacc) * b.quantity;
+            return plB - plA;
+        });
+    }
+    displayStocks();
+};
+
+// --- UI & DATA FETCHING ---
 function displayStocks() {
     const stockList = document.getElementById("stockList");
+    if (!stockList) return;
     stockList.innerHTML = "";
-
+    
     let totalVal = 0, totalInv = 0;
 
     stocks.forEach((stock, i) => {
@@ -56,130 +140,58 @@ function displayStocks() {
         const pl = amount - investment;
         const plPercent = investment > 0 ? (pl / investment) * 100 : 0;
 
-        totalVal += amount;
+        totalVal += amount; 
         totalInv += investment;
 
-        const row = document.createElement("tr");
-        row.innerHTML = `
+        const row = `<tr>
             <td>${stock.name}</td>
-            <td contenteditable="true" onblur="updateStock(${i}, 'quantity', this.textContent)">${stock.quantity}</td>
-            <td contenteditable="true" onblur="updateStock(${i}, 'wacc', this.textContent)">${stock.wacc}</td>
+            <td contenteditable="true" onblur="updateStock(${i}, 'quantity', this.innerText)">${stock.quantity}</td>
+            <td contenteditable="true" onblur="updateStock(${i}, 'wacc', this.innerText)">${stock.wacc}</td>
             <td class="ltp-cell">${stock.ltp.toFixed(2)}</td>
             <td>${amount.toFixed(2)}</td>
-            <td contenteditable="true" onblur="updateStock(${i}, 'target', this.textContent)">${stock.target || 0}</td>
-            <td contenteditable="true" onblur="updateStock(${i}, 'stopLoss', this.textContent)">${stock.stopLoss || 0}</td>
+            <td contenteditable="true" onblur="updateStock(${i}, 'target', this.innerText)">${stock.target || 0}</td>
+            <td contenteditable="true" onblur="updateStock(${i}, 'stopLoss', this.innerText)">${stock.stopLoss || 0}</td>
             <td class="${pl >= 0 ? 'profit' : 'loss'}">${pl.toFixed(2)}</td>
             <td class="${pl >= 0 ? 'profit' : 'loss'}">${plPercent.toFixed(2)}%</td>
-            <td><button class="delete-btn" style="background:none; border:none; color:#848e9c; cursor:pointer;" onclick="deleteStock(${i})">✕</button></td>
-        `;
-        stockList.appendChild(row);
+            <td><button onclick="deleteStock(${i})" class="btn-danger">✕</button></td>
+        </tr>`;
+        stockList.innerHTML += row;
     });
-
     updateDashboard(totalInv, totalVal);
 }
 
 function updateDashboard(inv, val) {
-    const pl = val - inv;
-    const plPercent = inv > 0 ? (pl / inv) * 100 : 0;
+    const invEl = document.getElementById("currentInvestment");
+    const valEl = document.getElementById("currentValue");
+    const plEl = document.getElementById("totalProfitLoss");
 
-    document.getElementById("currentInvestment").textContent = inv.toLocaleString(undefined, {minimumFractionDigits: 2});
-    document.getElementById("currentValue").textContent = val.toLocaleString(undefined, {minimumFractionDigits: 2});
+    if(invEl) invEl.textContent = inv.toLocaleString();
+    if(valEl) valEl.textContent = val.toLocaleString();
     
-    const plElement = document.getElementById("totalProfitLoss");
-    const plPercentElement = document.getElementById("totalPLPercent");
-    
-    plElement.textContent = pl.toLocaleString(undefined, {minimumFractionDigits: 2});
-    plPercentElement.textContent = `${pl >= 0 ? '+' : ''}${plPercent.toFixed(2)}%`;
-    
-    plElement.className = `value ${pl >= 0 ? 'profit' : 'loss'}`;
-    plPercentElement.className = `sub-value ${pl >= 0 ? 'profit' : 'loss'}`;
+    const pl = val - inv;
+    if(plEl) {
+        plEl.textContent = pl.toLocaleString();
+        plEl.className = `value ${pl >= 0 ? 'profit' : 'loss'}`;
+    }
 }
 
 async function fetchAllLTPs() {
     if (!stocks.length) return;
+    const statusTag = document.getElementById("lastUpdated");
+    if(statusTag) statusTag.innerText = "Syncing...";
 
     for (let i = 0; i < stocks.length; i++) {
-        const symbol = stocks[i].name;
         try {
-            const resp = await fetch(`${BACKEND_URL}/api/ltp?symbol=${symbol}`);
-            if (!resp.ok) continue;
-            const data = await resp.json();
-            const newLtp = Number(data.ltp) || 0;
-            
-            if(newLtp !== stocks[i].ltp) {
-                stocks[i].ltp = newLtp;
-                checkAlerts(stocks[i]);
-                triggerFlash(i);
+            const resp = await fetch(`${BACKEND_URL}/api/ltp?symbol=${stocks[i].name}`);
+            if (resp.ok) {
+                const data = await resp.json();
+                stocks[i].ltp = Number(data.ltp) || 0;
             }
-        } catch (err) {
-            console.error("Error fetching LTP for", symbol);
-        }
+        } catch (e) { console.error("Fetch error for " + stocks[i].name, e); }
     }
     displayStocks();
-    saveStocks();
-    document.getElementById("lastUpdated").innerText = `Last Sync: ${new Date().toLocaleTimeString()}`;
+    if(statusTag) statusTag.innerText = `Last Sync: ${new Date().toLocaleTimeString()}`;
 }
 
-function checkAlerts(stock) {
-    if (stock.target > 0 && stock.ltp >= stock.target && !stock.targetNotified) {
-        showNotification(`🎯 Target: ${stock.name}`, `${stock.name} hit ${stock.ltp}`);
-        stock.targetNotified = true;
-    }
-    if (stock.stopLoss > 0 && stock.ltp <= stock.stopLoss && !stock.stopNotified) {
-        showNotification(`⚠️ Stop Loss: ${stock.name}`, `${stock.name} dropped to ${stock.ltp}`);
-        stock.stopNotified = true;
-    }
-}
-
-function triggerFlash(index) {
-    const rows = document.getElementById("stockList").children;
-    if(rows[index]) {
-        rows[index].classList.add('flash-update');
-        setTimeout(() => rows[index].classList.remove('flash-update'), 1500);
-    }
-}
-
-function updateStock(i, field, value) {
-    const val = parseFloat(value);
-    if (isNaN(val)) return;
-    if (field === 'target' || field === 'stopLoss') {
-        stocks[i].targetNotified = false;
-        stocks[i].stopNotified = false;
-    }
-    stocks[i][field] = val;
-    saveStocks();
-    displayStocks();
-}
-
-function deleteStock(i) {
-    if(confirm("Delete this asset?")) {
-        stocks.splice(i, 1);
-        displayStocks();
-        saveStocks();
-    }
-}
-
-function sortStocks(field) {
-    if (field === 'name') stocks.sort((a, b) => a.name.localeCompare(b.name));
-    else if (field === 'profitLoss') stocks.sort((a, b) => ((b.ltp - b.wacc) * b.quantity) - ((a.ltp - a.wacc) * a.quantity));
-    displayStocks();
-}
-
-function clearCache() {
-    if (confirm("Reset entire portfolio?")) {
-        localStorage.removeItem('stocks');
-        stocks = [];
-        window.location.reload();
-    }
-}
-
-function pushNotification() {
-    stocks.forEach(s => { s.targetNotified = false; s.stopNotified = false; });
-    fetchAllLTPs();
-    alert("Alerts reset. You will be notified when targets are hit.");
-}
-
-// Start sequence
-displayStocks();
-fetchAllLTPs();
-setInterval(fetchAllLTPs, 30000); // 30 seconds interval to respect Render's free tier
+// Update every 60 seconds
+setInterval(fetchAllLTPs, 60000);
