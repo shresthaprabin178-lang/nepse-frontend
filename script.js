@@ -1,19 +1,15 @@
-// Request permission for desktop notifications
-if (Notification.permission !== "granted") {
-    Notification.requestPermission().then(permission => {
-        if (permission === "granted") {
-            console.log("✅ Notification permission granted.");
-        } else {
-            console.log("❌ Notification permission denied.");
-        }
-    });
-}
 let stocks = JSON.parse(localStorage.getItem('stocks')) || [];
 const BACKEND_URL = "https://nepse-live-backend-1.onrender.com";
+
+// Request Notifications
+if (Notification.permission !== "granted") {
+    Notification.requestPermission();
+}
 
 function saveStocks() {
     localStorage.setItem('stocks', JSON.stringify(stocks));
 }
+
 function showNotification(title, message) {
     if (Notification.permission === "granted") {
         new Notification(title, { 
@@ -22,6 +18,7 @@ function showNotification(title, message) {
         });
     }
 }
+
 function addStock() {
     let name = document.getElementById("stockName").value.toUpperCase().trim();
     const quantity = parseFloat(document.getElementById("quantity").value);
@@ -32,127 +29,72 @@ function addStock() {
         return;
     }
 
-    stocks.push({ name, quantity, wacc, target: 0, stopLoss: 0, ltp: 0, targetNotified: false, stopNotified: false });
-    clearInputs();
-    displayStocks();
-    saveStocks();
-}
-// --- Clear Cache Function ---
-function clearCache() {
-    // 1. Confirm with the user before deleting data
-    const confirmClear = confirm("Are you sure you want to clear all stored stock data? This action cannot be undone.");
-
-    if (confirmClear) {
-        // 2. Remove the 'stocks' item from the browser's Local Storage
-        localStorage.removeItem('stocks');
-
-        // 3. Optional: You could remove all items if you're sure nothing else is being stored
-        // localStorage.clear(); 
-        
-        console.log("✅ Local storage for 'stocks' has been cleared.");
-
-        // 4. Reload the page to reset the application state and display an empty table
-        window.location.reload();
-    } else {
-        console.log("❌ Clear cache cancelled.");
-    }
-}
-function clearInputs() {
+    stocks.push({ 
+        name, quantity, wacc, 
+        target: 0, stopLoss: 0, ltp: 0, 
+        targetNotified: false, stopNotified: false 
+    });
+    
     document.getElementById("stockName").value = "";
     document.getElementById("quantity").value = "";
     document.getElementById("wacc").value = "";
+    
+    displayStocks();
+    saveStocks();
+    fetchAllLTPs(); // Immediate update for new stock
 }
+
 function displayStocks() {
     const stockList = document.getElementById("stockList");
     stockList.innerHTML = "";
 
-    let currentValue = 0, totalPL = 0, currentInvestment = 0, totalProfitLoss = 0;
+    let totalVal = 0, totalInv = 0;
 
     stocks.forEach((stock, i) => {
         const amount = stock.ltp * stock.quantity;
-        const profitLoss = (stock.ltp - stock.wacc) * stock.quantity;
-        const plPercent = stock.wacc > 0 ? ((stock.ltp - stock.wacc) / stock.wacc) * 100 : 0;
         const investment = stock.wacc * stock.quantity;
+        const pl = amount - investment;
+        const plPercent = investment > 0 ? (pl / investment) * 100 : 0;
 
-        currentValue += amount; totalPL += profitLoss; currentInvestment += investment; totalProfitLoss += profitLoss;
+        totalVal += amount;
+        totalInv += investment;
 
         const row = document.createElement("tr");
-        // FIX: The row.innerHTML is now CORRECTLY ordered and uses onblur
         row.innerHTML = `
-            <td>${stock.name}</td>                                                                               <td contenteditable="true" onblur="updateStock(${i}, 'quantity', this.textContent)">${stock.quantity}</td>    <td contenteditable="true" onblur="updateStock(${i}, 'wacc', this.textContent)">${stock.wacc}</td>           <td>${stock.ltp.toFixed(2)}</td>                                                                    <td>${amount.toFixed(2)}</td>                                                                       <td contenteditable="true" onblur="updateStock(${i}, 'target', this.textContent)">${stock.target || 0}</td>  <td contenteditable="true" onblur="updateStock(${i}, 'stopLoss', this.textContent)">${stock.stopLoss || 0}</td><td class="${profitLoss >= 0 ? 'profit' : 'loss'}">${profitLoss.toFixed(2)}</td>                    <td class="${profitLoss >= 0 ? 'profit' : 'loss'}">${plPercent.toFixed(2)}%</td>                    <td><button class="delete-btn" onclick="deleteStock(${i})">Delete</button></td>                      `;
-
+            <td>${stock.name}</td>
+            <td contenteditable="true" onblur="updateStock(${i}, 'quantity', this.textContent)">${stock.quantity}</td>
+            <td contenteditable="true" onblur="updateStock(${i}, 'wacc', this.textContent)">${stock.wacc}</td>
+            <td class="ltp-cell">${stock.ltp.toFixed(2)}</td>
+            <td>${amount.toFixed(2)}</td>
+            <td contenteditable="true" onblur="updateStock(${i}, 'target', this.textContent)">${stock.target || 0}</td>
+            <td contenteditable="true" onblur="updateStock(${i}, 'stopLoss', this.textContent)">${stock.stopLoss || 0}</td>
+            <td class="${pl >= 0 ? 'profit' : 'loss'}">${pl.toFixed(2)}</td>
+            <td class="${pl >= 0 ? 'profit' : 'loss'}">${plPercent.toFixed(2)}%</td>
+            <td><button class="delete-btn" style="background:none; border:none; color:#848e9c; cursor:pointer;" onclick="deleteStock(${i})">✕</button></td>
+        `;
         stockList.appendChild(row);
     });
 
-    document.getElementById("currentValue").textContent = currentValue.toFixed(2);
-    document.getElementById("totalPL").textContent = totalPL.toFixed(2);
-    document.getElementById("currentInvestment").textContent = currentInvestment.toFixed(2);
-    document.getElementById("totalProfitLoss").textContent = totalProfitLoss.toFixed(2);
-    
-    // Save stocks after display is done
-    saveStocks(); 
+    updateDashboard(totalInv, totalVal);
 }
 
-function updateStock(i, field, value) {
-    const val = parseFloat(value);
-    if (isNaN(val) || val < 0) return;
+function updateDashboard(inv, val) {
+    const pl = val - inv;
+    const plPercent = inv > 0 ? (pl / inv) * 100 : 0;
+
+    document.getElementById("currentInvestment").textContent = inv.toLocaleString(undefined, {minimumFractionDigits: 2});
+    document.getElementById("currentValue").textContent = val.toLocaleString(undefined, {minimumFractionDigits: 2});
     
-    // CRITICAL FIX: Reset notification flags when target or stopLoss is changed
-    if (field === 'target' || field === 'stopLoss') {
-        stocks[i].targetNotified = false;
-        stocks[i].stopNotified = false;
-    }
+    const plElement = document.getElementById("totalProfitLoss");
+    const plPercentElement = document.getElementById("totalPLPercent");
     
-    stocks[i][field] = val;
-    saveStocks();
-}
-function deleteStock(i) {
-    stocks.splice(i, 1);
-    displayStocks();
-    saveStocks();
+    plElement.textContent = pl.toLocaleString(undefined, {minimumFractionDigits: 2});
+    plPercentElement.textContent = `${pl >= 0 ? '+' : ''}${plPercent.toFixed(2)}%`;
+    
+    plElement.className = `value ${pl >= 0 ? 'profit' : 'loss'}`;
+    plPercentElement.className = `sub-value ${pl >= 0 ? 'profit' : 'loss'}`;
 }
 
-function sortStocks(field) {
-    if (field === 'name') stocks.sort((a, b) => a.name.localeCompare(b.name));
-    else if (field === 'profitLoss') stocks.sort((a, b) => ((b.ltp - b.wacc) * b.quantity) - ((a.ltp - a.wacc) * a.quantity));
-    displayStocks();
-}
-
-// --- LTP Handling ---
-
-// Update only the LTP column and dependent columns for one row
-// Update only the LTP column and dependent columns for one row
-function updateLTPCell(index, ltp) {
-    const stockList = document.getElementById("stockList");
-    const row = stockList.children[index];
-    if (!row) return;
-
-    // The LTP column in the HTML (index 3)
-    row.cells[3].textContent = ltp.toFixed(2);
-
-    // Get WACC (index 2) and Quantity (index 1) to calculate new values
-    const quantity = parseFloat(row.cells[1].textContent);
-    const wacc = parseFloat(row.cells[2].textContent);
-    
-    // CALCULATIONS
-    const amount = ltp * quantity;
-    const profitLoss = (ltp - wacc) * quantity;
-    const plPercent = wacc > 0 ? ((ltp - wacc) / wacc) * 100 : 0;
-    
-    // Update the other dependent cells based on the 10-column structure:
-    row.cells[4].textContent = amount.toFixed(2); // Amount (index 4)
-
-    // Profit/Loss (index 7)
-    row.cells[7].textContent = profitLoss.toFixed(2);
-    row.cells[7].className = profitLoss >= 0 ? 'profit' : 'loss';
-    
-    // Profit/Loss % (index 8)
-    row.cells[8].textContent = plPercent.toFixed(2) + "%";
-    row.cells[8].className = profitLoss >= 0 ? 'profit' : 'loss';
-    
-    // No need to touch Target Price (5), Stop Loss (6), or Action (9)
-}
-// Fetch LTP for all stocks from backend
 async function fetchAllLTPs() {
     if (!stocks.length) return;
 
@@ -162,52 +104,82 @@ async function fetchAllLTPs() {
             const resp = await fetch(`${BACKEND_URL}/api/ltp?symbol=${symbol}`);
             if (!resp.ok) continue;
             const data = await resp.json();
-            const ltp = Number(data.ltp) || 0;
-            stocks[i].ltp = ltp;
-            updateLTPCell(i, ltp);
-
-            // === Check for notifications ===
-            const target = parseFloat(stocks[i].target);
-            const stopLoss = parseFloat(stocks[i].stopLoss);
+            const newLtp = Number(data.ltp) || 0;
             
-            let notified = false; // Use a temporary flag to track if any action was taken
-
-            if (!isNaN(target) && target > 0 && ltp >= target && !stocks[i].targetNotified) {
-                showNotification(`🎯 ${symbol}`, `Target reached at Rs. ${ltp}`);
-                stocks[i].targetNotified = true;
-                notified = true;
-            }   
-
-            if (!isNaN(stopLoss) && stopLoss > 0 && ltp <= stopLoss && !stocks[i].stopNotified) {
-                showNotification(`⚠️ ${symbol}`, `Stop loss triggered at Rs. ${ltp}`);
-                stocks[i].stopNotified = true;
-                notified = true;
+            if(newLtp !== stocks[i].ltp) {
+                stocks[i].ltp = newLtp;
+                checkAlerts(stocks[i]);
+                triggerFlash(i);
             }
-            
-            // CRITICAL FIX: Save the updated flags to local storage immediately
-            if (notified) {
-                saveStocks(); 
-            }
-            
         } catch (err) {
-            console.error("Error fetching LTP for", symbol, err);
+            console.error("Error fetching LTP for", symbol);
         }
     }
-
-    // You can remove the old saveStocks() call from here, as it's now done inside the loop
-    // saveStocks(); // <-- REMOVE THIS LINE IF IT WAS OUTSIDE THE LOOP
-}
-async function pushNotification() {
-    // Reset all notification flags
-    stocks.forEach(stock => {
-        stock.targetNotified = false;
-        stock.stopNotified = false;
-    });
-    
-    await fetchAllLTPs();
+    displayStocks();
     saveStocks();
+    document.getElementById("lastUpdated").innerText = `Last Sync: ${new Date().toLocaleTimeString()}`;
 }
-// Initial display
+
+function checkAlerts(stock) {
+    if (stock.target > 0 && stock.ltp >= stock.target && !stock.targetNotified) {
+        showNotification(`🎯 Target: ${stock.name}`, `${stock.name} hit ${stock.ltp}`);
+        stock.targetNotified = true;
+    }
+    if (stock.stopLoss > 0 && stock.ltp <= stock.stopLoss && !stock.stopNotified) {
+        showNotification(`⚠️ Stop Loss: ${stock.name}`, `${stock.name} dropped to ${stock.ltp}`);
+        stock.stopNotified = true;
+    }
+}
+
+function triggerFlash(index) {
+    const rows = document.getElementById("stockList").children;
+    if(rows[index]) {
+        rows[index].classList.add('flash-update');
+        setTimeout(() => rows[index].classList.remove('flash-update'), 1500);
+    }
+}
+
+function updateStock(i, field, value) {
+    const val = parseFloat(value);
+    if (isNaN(val)) return;
+    if (field === 'target' || field === 'stopLoss') {
+        stocks[i].targetNotified = false;
+        stocks[i].stopNotified = false;
+    }
+    stocks[i][field] = val;
+    saveStocks();
+    displayStocks();
+}
+
+function deleteStock(i) {
+    if(confirm("Delete this asset?")) {
+        stocks.splice(i, 1);
+        displayStocks();
+        saveStocks();
+    }
+}
+
+function sortStocks(field) {
+    if (field === 'name') stocks.sort((a, b) => a.name.localeCompare(b.name));
+    else if (field === 'profitLoss') stocks.sort((a, b) => ((b.ltp - b.wacc) * b.quantity) - ((a.ltp - a.wacc) * a.quantity));
+    displayStocks();
+}
+
+function clearCache() {
+    if (confirm("Reset entire portfolio?")) {
+        localStorage.removeItem('stocks');
+        stocks = [];
+        window.location.reload();
+    }
+}
+
+function pushNotification() {
+    stocks.forEach(s => { s.targetNotified = false; s.stopNotified = false; });
+    fetchAllLTPs();
+    alert("Alerts reset. You will be notified when targets are hit.");
+}
+
+// Start sequence
 displayStocks();
-// Fetch LTP every 10 seconds
-setInterval(fetchAllLTPs, 10000);
+fetchAllLTPs();
+setInterval(fetchAllLTPs, 30000); // 30 seconds interval to respect Render's free tier

@@ -1,120 +1,170 @@
+:root {
+    --bg: #0b0e11;
+    --card-bg: #1e2329;
+    --border: #2b3139;
+    --primary: #f0b90b;
+    --success: #0ecb81;
+    --danger: #f6465d;
+    --text-main: #eaecef;
+    --text-muted: #848e9c;
+}
+
 body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background-color: #f5f5f5;
+    background-color: var(--bg);
+    color: var(--text-main);
+    font-family: 'Inter', sans-serif;
     margin: 0;
     padding: 20px;
+    line-height: 1.6;
 }
 
 .container {
-    max-width: 900px;
+    max-width: 1150px;
     margin: auto;
-    background-color: #ffffff;
-    padding: 20px;
-    border-radius: 12px;
-    box-shadow: 0px 4px 15px rgba(0, 0, 0, 0.1);
 }
 
-h1 {
-    text-align: center;
-    color: #333;
-}
-
-.stock-form {
+header {
     display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    justify-content: center;
+    justify-content: space-between;
+    align-items: center;
     margin-bottom: 20px;
 }
 
-.stock-form input {
-    padding: 10px;
-    border-radius: 6px;
-    border: 1px solid #ccc;
-    width: 140px;
+.pro-badge {
+    background: var(--primary);
+    color: black;
+    font-size: 0.65rem;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: bold;
+    margin-left: 8px;
 }
 
-.stock-form button {
-    padding: 10px 20px;
-    border: none;
-    border-radius: 6px;
-    background-color: #007bff;
-    color: white;
-    cursor: pointer;
-    transition: 0.3s;
+.status-tag {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    background: var(--card-bg);
+    padding: 4px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
 }
 
-.stock-form button:hover {
-    background-color: #0056b3;
+/* Dashboard Cards */
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 15px;
+    margin-bottom: 30px;
 }
 
-.sort-buttons {
-    text-align: center;
-    margin-bottom: 10px;
+.card {
+    background: var(--card-bg);
+    padding: 20px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
 }
 
-.sort-buttons button {
-    margin: 0 5px;
-    padding: 8px 16px;
-    border: none;
-    border-radius: 6px;
-    background-color: #28a745;
-    color: #fff;
-    cursor: pointer;
-    transition: 0.3s;
-}
+.label { color: var(--text-muted); font-size: 0.85rem; }
+.value { font-family: 'Roboto Mono', monospace; font-size: 1.6rem; font-weight: 600; margin-top: 5px; }
+.sub-value { font-size: 0.9rem; margin-top: 4px; font-family: 'Roboto Mono', monospace;}
 
-.sort-buttons button:hover {
-    background-color: #1e7e34;
+/* Table Styling */
+.table-container {
+    background: var(--card-bg);
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    overflow-x: auto;
+    margin-bottom: 25px;
 }
 
 table {
     width: 100%;
     border-collapse: collapse;
-    margin-top: 10px;
-}
-
-th, td {
-    border: 1px solid #ddd;
-    padding: 10px;
-    text-align: center;
 }
 
 th {
-    background-color: #007bff;
+    background: #2b3139;
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    padding: 15px;
+    text-align: left;
+    letter-spacing: 1px;
+}
+
+td {
+    padding: 15px;
+    border-bottom: 1px solid var(--border);
+    font-family: 'Roboto Mono', monospace;
+    font-size: 0.95rem;
+}
+
+/* Color Classes */
+.profit { color: var(--success) !important; }
+.loss { color: var(--danger) !important; }
+
+/* Form Elements */
+.stock-form { display: flex; gap: 12px; margin-bottom: 25px; flex-wrap: wrap; }
+input {
+    background: #2b3139;
+    border: 1px solid var(--border);
     color: white;
+    padding: 12px;
+    border-radius: 8px;
+    outline: none;
+    flex: 1;
+    min-width: 150px;
 }
 
-tfoot td {
-    font-weight: bold;
-    background-color: #f1f1f1;
-}
+input:focus { border-color: var(--primary); }
 
-.profit {
-    color: green;
-    font-weight: bold;
-}
-
-.loss {
-    color: red;
-    font-weight: bold;
-}
-
-td[contenteditable="true"] {
-    background-color: #fefefe;
-    cursor: text;
-}
-
-.delete-btn {
-    padding: 5px 10px;
-    background-color: #dc3545;
-    color: white;
-    border: none;
-    border-radius: 6px;
+button {
     cursor: pointer;
-    transition: 0.3s;
+    font-weight: 600;
+    transition: all 0.2s ease;
 }
 
-.delete-btn:hover {
-    background-color: #a71d2a;
+button[onclick="addStock()"] {
+    background: var(--primary);
+    border: none;
+    padding: 12px 25px;
+    border-radius: 8px;
+    color: #000;
+}
+
+button[onclick="addStock()"]:hover { opacity: 0.9; transform: translateY(-1px); }
+
+.actions { display: flex; gap: 10px; }
+
+.btn-outline {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    padding: 10px 18px;
+    border-radius: 8px;
+}
+
+.btn-outline:hover { color: white; border-color: var(--text-main); background: #2b3139; }
+
+.btn-danger {
+    background: #2a1215;
+    color: var(--danger);
+    border: 1px solid var(--danger);
+    padding: 10px 18px;
+    border-radius: 8px;
+}
+
+.btn-danger:hover { background: var(--danger); color: white; }
+
+/* Live update flash animation */
+@keyframes flashGreen {
+    0% { background-color: rgba(14, 203, 129, 0.2); }
+    100% { background-color: transparent; }
+}
+.flash-update { animation: flashGreen 1.5s ease-out; }
+
+[contenteditable="true"]:focus {
+    background: #2b3139;
+    outline: 1px solid var(--primary);
+    border-radius: 4px;
 }

@@ -1,62 +1,69 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NEPSE Portfolio Tracker</title>
-<link rel="stylesheet" href="style.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEPSE Pro Tracker</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Roboto+Mono:wght@500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div class="container">
-    <h1>NEPSE Portfolio Tracker</h1>
-    <div class="stock-form">
-        <input type="text" id="stockName" placeholder="Stock Symbol (e.g. NABIL)">
-        <input type="number" id="quantity" placeholder="Quantity">
-        <input type="number" id="wacc" placeholder="WACC Price">
-        <button onclick="addStock()">Add Stock</button>
+    <div class="container">
+        <header>
+            <h1>NEPSE Portfolio <span class="pro-badge">PRO</span></h1>
+            <div id="lastUpdated" class="status-tag">Initializing...</div>
+        </header>
+
+        <div class="dashboard-grid">
+            <div class="card">
+                <span class="label">Total Investment</span>
+                <div id="currentInvestment" class="value">0.00</div>
+            </div>
+            <div class="card">
+                <span class="label">Current Value</span>
+                <div id="currentValue" class="value">0.00</div>
+            </div>
+            <div class="card">
+                <span class="label">Total Profit/Loss</span>
+                <div id="totalProfitLoss" class="value">0.00</div>
+                <div id="totalPLPercent" class="sub-value">0%</div>
+            </div>
+        </div>
+
+        <div class="stock-form">
+            <input type="text" id="stockName" placeholder="Symbol (e.g. NABIL)">
+            <input type="number" id="quantity" placeholder="Quantity">
+            <input type="number" id="wacc" placeholder="WACC">
+            <button onclick="addStock()">+ Add Asset</button>
+        </div>
+
+        <div class="table-container">
+            <table id="stockTable">
+                <thead>
+                    <tr>
+                        <th>Asset</th>
+                        <th>Qty</th>
+                        <th>WACC</th>
+                        <th>LTP</th>
+                        <th>Value</th>
+                        <th>Target</th>
+                        <th>Stop</th>
+                        <th>P/L</th>
+                        <th>%</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="stockList"></tbody>
+            </table>
+        </div>
+
+        <div class="actions">
+            <button onclick="sortStocks('name')" class="btn-outline">Sort Name</button>
+            <button onclick="sortStocks('profitLoss')" class="btn-outline">Sort P/L</button>
+            <button onclick="pushNotification()" class="btn-outline">Reset Alerts</button>
+            <button onclick="clearCache()" class="btn-danger">Clear All Data</button>
+        </div>
     </div>
-
-<div class="sort-buttons">
-        <button onclick="sortStocks('name')">Sort by Name</button>
-        <button onclick="sortStocks('profitLoss')">Sort by Profit/Loss</button>
-        <button onclick="pushNotification()">Push Notification</button>
-        <button onclick="clearCache()" style="background-color: #dc3545; color: white;">Clear Cache</button>
-</div>
-<table id="stockTable">
-        <thead>
-            <tr>
-                <th>Stock</th>
-                <th>Quantity</th>
-                <th>WACC</th>
-                <th>LTP</th>
-                <th>Amount</th>
-                <th>Target Price</th>
-                <th>Stop Loss</th>
-                <th>Profit/Loss</th>
-                <th>Profit/Loss %</th>
-                <th>Action</th>
-            </tr>
-        </thead>
-        <tbody id="stockList"></tbody>
-        <tfoot>
-            <tr>
-                <td colspan="4"><strong>Current Value</strong></td>
-                <td id="currentValue">0</td>
-                <td id="totalPL">0</td>
-                <td></td>
-                <td></td>
-            </tr>
-            <tr>
-                <td colspan="4"><strong>Current Investment</strong></td>
-                <td id="currentInvestment">0</td>
-                <td id="totalProfitLoss">0</td>
-                <td></td>
-                <td></td>
-            </tr>
-        </tfoot>
-    </table>
-</div>
-
-<script src="script.js"></script>
+    <script src="script.js"></script>
 </body>
 </html>
