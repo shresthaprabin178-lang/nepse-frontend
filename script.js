@@ -64,14 +64,19 @@ onAuthStateChanged(auth, async (user) => {
         // Load existing cloud data
         const docSnap = await getDoc(doc(db, "users", user.uid));
         if (docSnap.exists()) {
-            stocks = docSnap.data().stocks || [];
+            stocks = docSnap.data().stocks || []; // load active portfolio
+            history = data.history || []; // Load sold history (CRITICAL UPDATE)
             displayStocks();
+            displayHistory();
             fetchAllLTPs();
         }
     } else {
         currentUser = null;
         if(loginBtn) loginBtn.style.display = "block";
         if(userInfo) userInfo.style.display = "none";
+        // Clear local data on logout for safety
+        stocks = [];
+        history = [];
     }
 });
 
@@ -143,6 +148,32 @@ window.updateStock = async (i, field, value) => {
         await saveToCloud();
         displayStocks();
     }
+};
+window.rollbackSale = async (i) => {
+    if (!confirm("Mistakenly sold? This will move the stock back to your active portfolio.")) return;
+
+    const soldItem = history[i];
+
+    // Create the active stock object again
+    const restoredStock = {
+        name: soldItem.name,
+        quantity: soldItem.quantity,
+        wacc: soldItem.buyPrice,
+        ltp: soldItem.sellPrice, // Set LTP to last sold price until next sync
+        target: 0,
+        stopLoss: 0
+    };
+
+    // Move data back
+    stocks.push(restoredStock); // Back to Active
+    history.splice(i, 1);       // Remove from History
+
+    // Refresh UI
+    displayStocks();
+    displayHistory();
+    
+    // Save to Cloud
+    await saveToCloud();
 };
 // --- TAB SWITCHING LOGIC ---
 window.switchTab = (tab) => {
@@ -241,6 +272,9 @@ function displayHistory() {
                 <td>${item.sellPrice.toFixed(2)}</td>
                 <td class="${item.pl >= 0 ? 'profit' : 'loss'}">${item.pl.toFixed(2)}</td>
                 <td>${item.date}</td>
+                <td>
+                    <button onclick="rollbackSale(${i})" class="btn-rollback">Undo</button>
+                </td>
             </tr>`;
         hList.innerHTML += row;
     });

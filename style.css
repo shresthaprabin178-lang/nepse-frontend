@@ -193,3 +193,17 @@ td { padding: 18px 15px; border-bottom: 1px solid var(--border-color); font-size
     font-size: 1.2rem;
     letter-spacing: 0.5px;
 }
+.btn-rollback {
+    background: #58a6ff; /* Blue */
+    color: black;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-weight: bold;
+    cursor: pointer;
+    font-size: 0.75rem;
+}
+
+.btn-rollback:hover {
+    background: #79c0ff;
+}
