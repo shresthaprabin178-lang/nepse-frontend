@@ -27,49 +27,75 @@
             <div>
                 <h1>Portfolio Overview</h1>
                 <p id="lastUpdated" class="status-tag">Connecting to NEPSE...</p>
+                <p id="alert-status" style="color: #f0b90b; font-size: 0.85rem; font-weight: bold; margin-top: 5px;"></p>
+            </div>
+
+            <div class="tabs">
+                <button class="tab-btn active" id="tab-portfolio" onclick="switchTab('portfolio')">Active Portfolio</button>
+                <button class="tab-btn" id="tab-history" onclick="switchTab('history')">Trade History</button>
             </div>
         </header>
 
-        <div class="stats-grid">
-            <div class="stat-card">
-                <span>Total Investment</span>
-                <h2 id="currentInvestment">0.00</h2>
+        <div id="portfolio-view">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <span>Total Investment</span>
+                    <h2 id="currentInvestment">0.00</h2>
+                </div>
+                <div class="stat-card">
+                    <span>Current Value</span>
+                    <h2 id="currentValue">0.00</h2>
+                </div>
+                <div class="stat-card">
+                    <span>Total P/L</span>
+                    <h2 id="totalProfitLoss">0.00</h2>
+                </div>
             </div>
-            <div class="stat-card">
-                <span>Current Value</span>
-                <h2 id="currentValue">0.00</h2>
+
+            <div class="action-bar card">
+                <input type="text" id="stockName" placeholder="Symbol (e.g. NABIL)">
+                <input type="number" id="quantity" placeholder="Qty">
+                <input type="number" id="wacc" placeholder="WACC">
+                <button onclick="addStock()" class="btn-primary">Add Stock</button>
             </div>
-            <div class="stat-card">
-                <span>Total P/L</span>
-                <h2 id="totalProfitLoss">0.00</h2>
+
+            <div class="table-card card">
+                <table>
+                    <thead>
+                        <tr>
+                            <th onclick="sortStocks('name')">Asset ↕</th>
+                            <th>Qty</th>
+                            <th>WACC</th>
+                            <th>LTP</th>
+                            <th>Value</th>
+                            <th>Target</th>
+                            <th>Stop Loss</th>
+                            <th onclick="sortStocks('profitLoss')">P/L ↕</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="stockList"></tbody>
+                </table>
             </div>
         </div>
 
-        <div class="action-bar card">
-            <input type="text" id="stockName" placeholder="Symbol (e.g. NABIL)">
-            <input type="number" id="quantity" placeholder="Qty">
-            <input type="number" id="wacc" placeholder="WACC">
-            <button onclick="addStock()" class="btn-primary">Add Stock</button>
-        </div>
-
-        <div class="table-card card">
-            <table>
-                <thead>
-                    <tr>
-                        <th onclick="sortStocks('name')">Asset ↕</th>
-                        <th>Qty</th>
-                        <th>WACC</th>
-                        <th>LTP</th>
-                        <th>Value</th>
-                        <th>Target</th>
-                        <th>Stop Loss</th>
-                        <th onclick="sortStocks('profitLoss')">P/L ↕</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody id="stockList">
-                    </tbody>
-            </table>
+        <div id="history-view" style="display: none;">
+            <div class="table-card card">
+                <h2 style="padding: 20px; color: #f0b90b;">Realized Profits (Sold History)</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Asset</th>
+                            <th>Qty Sold</th>
+                            <th>Bought @</th>
+                            <th>Sold @</th>
+                            <th>Net P/L</th>
+                            <th>Date</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyList"></tbody>
+                </table>
+            </div>
         </div>
     </div>
 

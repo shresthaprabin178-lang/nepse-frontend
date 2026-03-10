@@ -20,6 +20,7 @@ const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
 
 let stocks = [];
+let history=[];
 let currentUser = null;
 const BACKEND_URL = "https://nepse-live-backend-1.onrender.com";
 
@@ -141,6 +142,37 @@ window.updateStock = async (i, field, value) => {
         stocks[i][field] = val;
         await saveToCloud();
         displayStocks();
+    }
+};
+// --- TAB SWITCHING LOGIC ---
+window.switchTab = (tab) => {
+    const pView = document.getElementById('portfolio-view');
+    const hView = document.getElementById('history-view');
+    const pTab = document.getElementById('tab-portfolio');
+    const hTab = document.getElementById('tab-history');
+
+    // Safety check: make sure elements exist before trying to style them
+    if (!pView || !hView) return;
+
+    if (tab === 'portfolio') {
+        // Show Portfolio, Hide History
+        pView.style.display = 'block';
+        hView.style.display = 'none';
+        
+        // Update button colors
+        if(pTab) pTab.classList.add('active');
+        if(hTab) hTab.classList.remove('active');
+    } else {
+        // Hide Portfolio, Show History
+        pView.style.display = 'none';
+        hView.style.display = 'block';
+        
+        // Update button colors
+        if(hTab) hTab.classList.add('active');
+        if(pTab) pTab.classList.remove('active');
+        
+        // Refresh the history table data
+        displayHistory();
     }
 };
 

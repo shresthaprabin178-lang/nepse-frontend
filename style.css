@@ -114,3 +114,82 @@ td { padding: 18px 15px; border-bottom: 1px solid var(--border-color); font-size
 .btn-danger:hover { color: var(--red); }
 
 .status-tag { font-size: 0.85rem; color: var(--accent); margin-top: 5px; }
+/* Container for the tabs */
+.tabs {
+    display: flex;
+    gap: 12px;
+    margin-top: 15px;
+}
+
+/* Individual Tab Buttons */
+.tab-btn {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    color: var(--text-dim);
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+/* Active Tab (The one currently selected) */
+.tab-btn.active {
+    background: var(--gold);
+    color: #000;
+    border-color: var(--gold);
+    box-shadow: 0 0 10px rgba(240, 185, 11, 0.3);
+}
+
+.tab-btn:hover:not(.active) {
+    border-color: var(--text-dim);
+    color: var(--text-main);
+}
+/* The Sell Button */
+.btn-sell {
+    background: #ff9f43; /* Fintech Orange */
+    color: #000;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-weight: bold;
+    font-size: 0.8rem;
+    cursor: pointer;
+    margin-right: 8px;
+    transition: 0.2s;
+}
+
+.btn-sell:hover {
+    background: #ffb167;
+    transform: translateY(-1px);
+}
+
+/* Redefining the Delete (X) button for better alignment */
+.btn-danger {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--red);
+    padding: 5px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.btn-danger:hover {
+    background: var(--red);
+    color: white;
+}
+/* Ensure the views fill the container correctly */
+#portfolio-view, #history-view {
+    animation: fadeIn 0.4s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* History Table specific spacing */
+#history-view h2 {
+    font-size: 1.2rem;
+    letter-spacing: 0.5px;
+}
