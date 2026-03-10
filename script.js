@@ -93,7 +93,16 @@ window.addStock = async () => {
     if (!currentUser) return alert("Please Login with Google first!");
     if (!name || isNaN(qty) || isNaN(wacc)) return alert("Please fill all fields correctly!");
 
-    stocks.push({ name, quantity: qty, wacc, ltp: 0, target: 0, stopLoss: 0 });
+    stocks.push({ 
+        name, 
+        quantity: qty, 
+        wacc, 
+        ltp: 0, 
+        target: 0, 
+        stopLoss: 0,
+        targetHit: false, // Prevents repeated target notifications
+        slHit: false      // Prevents repeated stop-loss notifications
+    });
     
     // Clear inputs
     nameInput.value = ""; qtyInput.value = ""; waccInput.value = "";
@@ -309,16 +318,29 @@ async function fetchAllLTPs() {
             if (resp.ok) {
                 const data = await resp.json();
                 const newLtp = Number(data.ltp) || 0;
+                const stock = stocks[i]; // Reference to the current stock
                 
-                // --- Notification Logic ---
-                // Only alert if Target or Stop Loss is set (not 0)
-                if (stocks[i].target > 0 && newLtp >= stocks[i].target) {
-                    triggerAlert(`🎯 TARGET REACHED: ${stocks[i].name} is at ${newLtp}`);
-                } 
-                else if (stocks[i].stopLoss > 0 && newLtp <= stocks[i].stopLoss) {
-                    triggerAlert(`⚠️ STOP LOSS HIT: ${stocks[i].name} dropped to ${newLtp}`);
+                // --- Updated Notification Logic with "One-Time" Flags ---
+                // 🎯 Check Target
+                if (stock.target > 0 && newLtp >= stock.target) {
+                    if (!stock.targetHit) { // Only alert if we haven't hit it yet
+                        triggerAlert(`🎯 TARGET REACHED: ${stock.name} is at ${newLtp}`);
+                        stock.targetHit = true; // Mark as notified
+                        await saveToCloud(); // Save state so it doesn't alert after refresh
+                    }
+                } else if (newLtp < stock.target) {
+                    stock.targetHit = false; // Reset if price falls back below target
                 }
-                
+                // ⚠️ Check Stop Loss
+                if (stock.stopLoss > 0 && newLtp <= stock.stopLoss) {
+                    if (!stock.slHit) { // Only alert if we haven't hit it yet
+                        triggerAlert(`⚠️ STOP LOSS HIT: ${stock.name} dropped to ${newLtp}`);
+                        stock.slHit = true; // Mark as notified
+                        await saveToCloud();
+                    }
+                } else if (newLtp > stock.stopLoss) {
+                    stock.slHit = false; // Reset if price recovers
+                }
                 stocks[i].ltp = newLtp;
             }
         } catch (e) { console.error("Fetch error for " + stocks[i].name, e); }
