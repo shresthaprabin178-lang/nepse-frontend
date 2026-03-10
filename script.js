@@ -27,7 +27,7 @@ const BACKEND_URL = "https://nepse-live-backend-1.onrender.com";
 async function saveToCloud() {
     if (currentUser) {
         try {
-            await setDoc(doc(db, "users", currentUser.uid), { stocks: stocks });
+            await setDoc(doc(db, "users", currentUser.uid), { stocks: stocks, history: history });
         } catch (e) { console.error("Cloud Save Failed:", e); }
     }
 }
@@ -104,7 +104,37 @@ window.deleteStock = async (i) => {
         await saveToCloud();
     }
 };
+window.sellStock = async (i) => {
+    const stock = stocks[i];
+    
+    // 1. Ask for Sell Price
+    const sellPrice = prompt(`Enter Selling Price for ${stock.name}:`, stock.ltp);
+    
+    // 2. Validate input
+    if (sellPrice === null || isNaN(sellPrice) || sellPrice <= 0) return;
 
+    // 3. Create the History Object
+    const soldData = {
+        name: stock.name,
+        quantity: stock.quantity,
+        buyPrice: stock.wacc,
+        sellPrice: parseFloat(sellPrice),
+        pl: (parseFloat(sellPrice) - stock.wacc) * stock.quantity,
+        date: new Date().toLocaleDateString()
+    };
+
+    // 4. Move data
+    history.push(soldData); // Add to history array
+    stocks.splice(i, 1);    // Remove from active array
+
+    // 5. Refresh UI and Sync Cloud
+    displayStocks();
+    if (document.getElementById('history-view').style.display === 'block') {
+        displayHistory();
+    }
+    await saveToCloud();
+    alert(`Sold ${stock.name} successfully! Check 'Trade History' tab.`);
+};
 window.updateStock = async (i, field, value) => {
     const val = parseFloat(value);
     if (!isNaN(val)) {
@@ -153,11 +183,38 @@ function displayStocks() {
             <td contenteditable="true" onblur="updateStock(${i}, 'stopLoss', this.innerText)">${stock.stopLoss || 0}</td>
             <td class="${pl >= 0 ? 'profit' : 'loss'}">${pl.toFixed(2)}</td>
             <td class="${pl >= 0 ? 'profit' : 'loss'}">${plPercent.toFixed(2)}%</td>
-            <td><button onclick="deleteStock(${i})" class="btn-danger">✕</button></td>
+            <td>
+                <button onclick="sellStock(${i})" class="btn-sell">Sell</button>
+                <button onclick="deleteStock(${i})" class="btn-danger">✕</button>
+            </td>
         </tr>`;
         stockList.innerHTML += row;
     });
     updateDashboard(totalInv, totalVal);
+}
+function displayHistory() {
+    const hList = document.getElementById("historyList");
+    if (!hList) return;
+    
+    hList.innerHTML = "";
+    let totalRealizedPL = 0;
+
+    history.forEach(item => {
+        totalRealizedPL += item.pl;
+        const row = `
+            <tr>
+                <td>${item.name}</td>
+                <td>${item.quantity}</td>
+                <td>${item.buyPrice.toFixed(2)}</td>
+                <td>${item.sellPrice.toFixed(2)}</td>
+                <td class="${item.pl >= 0 ? 'profit' : 'loss'}">${item.pl.toFixed(2)}</td>
+                <td>${item.date}</td>
+            </tr>`;
+        hList.innerHTML += row;
+    });
+
+    // Optional: Log total realized profit to console for now
+    console.log("Total Realized P/L: ", totalRealizedPL);
 }
 
 function updateDashboard(inv, val) {
@@ -220,7 +277,3 @@ if (window.Notification && Notification.permission !== "granted") {
 }
 // Update every 60 seconds
 setInterval(fetchAllLTPs, 60000);
-// DELETE THIS AFTER TESTING
-setTimeout(() => {
-    triggerAlert("🚀 Notification Test: If you see this, your alerts are working!");
-}, 3000);
