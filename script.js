@@ -185,7 +185,18 @@ async function fetchAllLTPs() {
             const resp = await fetch(`${BACKEND_URL}/api/ltp?symbol=${stocks[i].name}`);
             if (resp.ok) {
                 const data = await resp.json();
-                stocks[i].ltp = Number(data.ltp) || 0;
+                const newLtp = Number(data.ltp) || 0;
+                
+                // --- Notification Logic ---
+                // Only alert if Target or Stop Loss is set (not 0)
+                if (stocks[i].target > 0 && newLtp >= stocks[i].target) {
+                    triggerAlert(`🎯 TARGET REACHED: ${stocks[i].name} is at ${newLtp}`);
+                } 
+                else if (stocks[i].stopLoss > 0 && newLtp <= stocks[i].stopLoss) {
+                    triggerAlert(`⚠️ STOP LOSS HIT: ${stocks[i].name} dropped to ${newLtp}`);
+                }
+                
+                stocks[i].ltp = newLtp;
             }
         } catch (e) { console.error("Fetch error for " + stocks[i].name, e); }
     }
@@ -193,5 +204,23 @@ async function fetchAllLTPs() {
     if(statusTag) statusTag.innerText = `Last Sync: ${new Date().toLocaleTimeString()}`;
 }
 
+// Helper function to handle the alert
+function triggerAlert(message) {
+    // 1. Show a browser popup
+    alert(message);
+    
+    // 2. Use the Web Notification API (for desktop bubbles)
+    if (Notification.permission === "granted") {
+        new Notification("NEPSE Portfolio Alert", { body: message });
+    }
+}
+// Request notification permission on page load
+if (window.Notification && Notification.permission !== "granted") {
+    Notification.requestPermission();
+}
 // Update every 60 seconds
 setInterval(fetchAllLTPs, 60000);
+// DELETE THIS AFTER TESTING
+setTimeout(() => {
+    triggerAlert("🚀 Notification Test: If you see this, your alerts are working!");
+}, 3000);

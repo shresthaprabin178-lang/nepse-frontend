@@ -3,18 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NEPSE Portfolio Pro</title>
+    <title>NEPSE Portfolio Tracker</title>
     <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
 </head>
 <body>
     <nav class="auth-nav">
-        <div class="logo">NEPSE<span>PRO</span></div>
+        <div class="logo">NEPSE<span>CLOUD</span></div>
         <div id="auth-section">
             <button id="login-btn" class="btn-google" onclick="handleLogin()">
-                <img src="https://img.icons8.com/color/16/000000/google-logo.png" alt="G"> Login with Google
+                <img src="https://img.icons8.com/color/16/000000/google-logo.png"> Sign in with Google
             </button>
             <div id="user-info" style="display: none;">
-                <img id="user-pic" src="" alt="User">
+                <img id="user-pic" src="" alt="Profile">
                 <span id="user-name"></span>
                 <button onclick="handleLogout()" class="btn-logout">Logout</button>
             </div>
@@ -22,38 +23,40 @@
     </nav>
 
     <div class="container">
-        <header>
-            <h1>Investment Dashboard</h1>
-            <p id="lastUpdated">Syncing cloud data...</p>
+        <header class="dashboard-header">
+            <div>
+                <h1>Portfolio Overview</h1>
+                <p id="lastUpdated" class="status-tag">Connecting to NEPSE...</p>
+            </div>
         </header>
 
-        <div class="dashboard-grid">
-            <div class="card">
-                <h3>Total Investment</h3>
-                <p id="currentInvestment" class="value">0.00</p>
+        <div class="stats-grid">
+            <div class="stat-card">
+                <span>Total Investment</span>
+                <h2 id="currentInvestment">0.00</h2>
             </div>
-            <div class="card">
-                <h3>Current Value</h3>
-                <p id="currentValue" class="value">0.00</p>
+            <div class="stat-card">
+                <span>Current Value</span>
+                <h2 id="currentValue">0.00</h2>
             </div>
-            <div class="card">
-                <h3>Total Profit/Loss</h3>
-                <p id="totalProfitLoss" class="value">0.00</p>
+            <div class="stat-card">
+                <span>Total P/L</span>
+                <h2 id="totalProfitLoss">0.00</h2>
             </div>
         </div>
 
-        <div class="input-section card">
+        <div class="action-bar card">
             <input type="text" id="stockName" placeholder="Symbol (e.g. NABIL)">
-            <input type="number" id="quantity" placeholder="Quantity">
+            <input type="number" id="quantity" placeholder="Qty">
             <input type="number" id="wacc" placeholder="WACC">
-            <button onclick="addStock()" class="btn-primary">Add Asset</button>
+            <button onclick="addStock()" class="btn-primary">Add Stock</button>
         </div>
 
-        <div class="table-container card">
+        <div class="table-card card">
             <table>
                 <thead>
                     <tr>
-                        <th onclick="sortStocks('name')">Symbol ↕</th>
+                        <th onclick="sortStocks('name')">Asset ↕</th>
                         <th>Qty</th>
                         <th>WACC</th>
                         <th>LTP</th>
@@ -62,10 +65,11 @@
                         <th>Stop Loss</th>
                         <th onclick="sortStocks('profitLoss')">P/L ↕</th>
                         <th>%</th>
-                        <th>Action</th>
+                        <th></th>
                     </tr>
                 </thead>
-                <tbody id="stockList"></tbody>
+                <tbody id="stockList">
+                    </tbody>
             </table>
         </div>
     </div>
