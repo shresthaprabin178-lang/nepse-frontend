@@ -207,3 +207,29 @@ td { padding: 18px 15px; border-bottom: 1px solid var(--border-color); font-size
 .btn-rollback:hover {
     background: #79c0ff;
 }
+/* Cost tooltip badge in Trade History */
+.cost-tip {
+    display: inline-block;
+    font-size: 0.75rem;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    padding: 2px 7px;
+    cursor: help;
+    white-space: nowrap;
+    transition: background 0.2s;
+}
+.cost-tip:hover {
+    background: rgba(88, 166, 255, 0.12);
+}
+ 
+/* Status tag colour transitions */
+#lastUpdated {
+    transition: color 0.4s ease;
+}
+ 
+/* Net Receive column — slightly dimmer than P/L to keep hierarchy */
+td.net-receive {
+    color: var(--text-dim);
+    font-size: 0.9rem;
+}

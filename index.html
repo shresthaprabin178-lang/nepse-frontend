@@ -27,15 +27,14 @@
             <div>
                 <h1>Portfolio Overview</h1>
                 <p id="lastUpdated" class="status-tag">Connecting to NEPSE...</p>
-                <p id="alert-status" style="color: #f0b90b; font-size: 0.85rem; font-weight: bold; margin-top: 5px;"></p>
             </div>
-
             <div class="tabs">
                 <button class="tab-btn active" id="tab-portfolio" onclick="switchTab('portfolio')">Active Portfolio</button>
                 <button class="tab-btn" id="tab-history" onclick="switchTab('history')">Trade History</button>
             </div>
         </header>
 
+        <!-- ── PORTFOLIO VIEW ──────────────────────────────────────── -->
         <div id="portfolio-view">
             <div class="stats-grid">
                 <div class="stat-card">
@@ -53,25 +52,25 @@
             </div>
 
             <div class="action-bar card">
-                <input type="text" id="stockName" placeholder="Symbol (e.g. NABIL)">
-                <input type="number" id="quantity" placeholder="Qty">
-                <input type="number" id="wacc" placeholder="WACC">
-                <button onclick="addStock()" class="btn-primary">Add Stock</button>
+                <input type="text"   id="stockName" placeholder="Symbol (e.g. NABIL)">
+                <input type="number" id="quantity"  placeholder="Qty">
+                <input type="number" id="wacc"      placeholder="WACC">
+                <button onclick="addStock()" class="btn-primary">+ Add Stock</button>
             </div>
 
             <div class="table-card card">
                 <table>
                     <thead>
                         <tr>
-                            <th onclick="sortStocks('name')">Asset ↕</th>
+                            <th onclick="sortStocks('name')" style="cursor:pointer">Asset ↕</th>
                             <th>Qty</th>
                             <th>WACC</th>
                             <th>LTP</th>
                             <th>Value</th>
                             <th>Target</th>
                             <th>Stop Loss</th>
-                            <th onclick="sortStocks('profitLoss')">P/L ↕</th>
-                            <th>P/L %</th>  <!-- ✅ FIX: Added missing column header -->
+                            <th onclick="sortStocks('profitLoss')" style="cursor:pointer">P/L ↕</th>
+                            <th>P/L %</th>
                             <th>Action</th>
                         </tr>
                     </thead>
@@ -80,25 +79,33 @@
             </div>
         </div>
 
+        <!-- ── HISTORY VIEW ───────────────────────────────────────── -->
         <div id="history-view" style="display: none;">
-            <!-- Realized P/L summary card -->
             <div class="stats-grid" style="margin-bottom: 20px;">
                 <div class="stat-card">
-                    <span>Total Realised P/L</span>
+                    <span>Total Realised Net P/L</span>
                     <h2 id="realizedPL" class="value">0.00</h2>
                 </div>
             </div>
 
             <div class="table-card card">
-                <h2 style="padding: 20px; color: #f0b90b;">Realised Profits (Sold History)</h2>
+                <h2 style="padding: 20px 20px 10px; color: #f0b90b;">
+                    Realised Trade History
+                    <span style="font-size:0.75rem; color: var(--text-dim); font-weight:400; margin-left:8px;">
+                        P/L shown after SEBON · Broker · DP · CGT deductions
+                    </span>
+                </h2>
                 <table>
                     <thead>
                         <tr>
                             <th>Asset</th>
-                            <th>Qty Sold</th>
+                            <th>Qty</th>
                             <th>Bought @</th>
                             <th>Sold @</th>
+                            <th>Net Receive</th>   <!-- new -->
                             <th>Net P/L</th>
+                            <th>Net P/L %</th>     <!-- new -->
+                            <th>Costs</th>         <!-- new -->
                             <th>Date</th>
                             <th>Action</th>
                         </tr>

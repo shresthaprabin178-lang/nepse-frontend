@@ -2,101 +2,155 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebas
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-const firebaseConfig = {
-  apiKey: "AIzaSyBowvP1x1od-RijlwT3gAoTzq5yiZ-faz4",
-  authDomain: "nepsetracker1.firebaseapp.com",
-  projectId: "nepsetracker1",
-  storageBucket: "nepsetracker1.firebasestorage.app",
-  messagingSenderId: "180767710295",
-  appId: "1:180767710295:web:71b87c8ae7cec69eb5d712",
-  measurementId: "G-L7GT9WQNED"
-};
-
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
+// ─── FIREBASE INIT ────────────────────────────────────────────────────────────
+const app = initializeApp({
+    apiKey: "AIzaSyBowvP1x1od-RijlwT3gAoTzq5yiZ-faz4",
+    authDomain: "nepsetracker1.firebaseapp.com",
+    projectId: "nepsetracker1",
+    storageBucket: "nepsetracker1.firebasestorage.app",
+    messagingSenderId: "180767710295",
+    appId: "1:180767710295:web:71b87c8ae7cec69eb5d712"
+});
+const auth     = getAuth(app);
+const db       = getFirestore(app);
 const provider = new GoogleAuthProvider();
 
-let stocks = [];
-let history = [];
-let currentUser = null;
+// ─── STATE ────────────────────────────────────────────────────────────────────
+let stocks = [], history = [], currentUser = null;
 const BACKEND_URL = "https://nepse-live-backend-1.onrender.com";
 
-// --- CLOUD SYNC ---
+// ─── DOM HELPERS ──────────────────────────────────────────────────────────────
+const $  = id => document.getElementById(id);
+
+// ─── CLOUD SYNC ───────────────────────────────────────────────────────────────
 async function saveToCloud() {
-    if (currentUser) {
-        try {
-            await setDoc(doc(db, "users", currentUser.uid), { stocks, history });
-        } catch (e) { console.error("Cloud Save Failed:", e); }
-    }
+    if (!currentUser) return;
+    try {
+        await setDoc(doc(db, "users", currentUser.uid), { stocks, history });
+    } catch (e) { console.error("Cloud save failed:", e); }
 }
 
-// --- AUTH ---
-window.handleLogin = async () => {
-    try {
-        await signInWithPopup(auth, provider);
-    } catch (e) {
-        console.error("Login Error:", e);
-        alert("Login failed. Check your Firebase popup settings.");
-    }
-};
+// ─── STATUS BAR ───────────────────────────────────────────────────────────────
+function setStatus(msg, type = 'live') {
+    const tag = $("lastUpdated");
+    if (!tag) return;
+    tag.innerText   = msg;
+    tag.style.color = type === 'warn' ? '#f0b90b' : '#23d160';
+}
 
-window.handleLogout = () => {
-    signOut(auth).then(() => {
-        stocks = [];
-        window.location.reload();
-    });
-};
+// ─── AUTH ─────────────────────────────────────────────────────────────────────
+window.handleLogin  = () => signInWithPopup(auth, provider).catch(e => {
+    console.error(e); alert("Login failed. Check popup settings.");
+});
+window.handleLogout = () => signOut(auth).then(() => { stocks = []; window.location.reload(); });
 
 onAuthStateChanged(auth, async (user) => {
-    const loginBtn = document.getElementById("login-btn");
-    const userInfo = document.getElementById("user-info");
-
     if (user) {
         currentUser = user;
-        if (loginBtn) loginBtn.style.display = "none";
-        if (userInfo) userInfo.style.display = "flex";
-        document.getElementById("user-name").innerText = user.displayName;
-        document.getElementById("user-pic").src = user.photoURL;
+        if ($("login-btn")) $("login-btn").style.display = "none";
+        if ($("user-info")) $("user-info").style.display = "flex";
+        if ($("user-name")) $("user-name").innerText = user.displayName;
+        if ($("user-pic"))  $("user-pic").src = user.photoURL;
 
-        const docSnap = await getDoc(doc(db, "users", user.uid));
-        if (docSnap.exists()) {
-            const data = docSnap.data();
-            stocks = data.stocks || [];
+        const snap = await getDoc(doc(db, "users", user.uid));
+        if (snap.exists()) {
+            const data = snap.data();
+            stocks  = data.stocks  || [];
             history = data.history || [];
+            // Show cached data instantly so dashboard is usable right away
             displayStocks();
             displayHistory();
+            setStatus("⚠ Showing cached prices · Syncing live...", "warn");
             fetchAllLTPs();
         }
     } else {
         currentUser = null;
-        if (loginBtn) loginBtn.style.display = "block";
-        if (userInfo) userInfo.style.display = "none";
-        stocks = [];
-        history = [];
+        if ($("login-btn")) $("login-btn").style.display = "block";
+        if ($("user-info")) $("user-info").style.display = "none";
+        stocks = []; history = [];
     }
 });
 
-// --- PORTFOLIO FUNCTIONS ---
+// ─── NEPSE COST ENGINE ────────────────────────────────────────────────────────
+
+/**
+ * Returns the standard NEPSE broker commission rate for a given sell amount.
+ *
+ * Tiered schedule (SEBON-approved):
+ *   ≤    50,000  →  0.40%
+ *   ≤   500,000  →  0.37%
+ *   ≤ 2,000,000  →  0.34%
+ *   ≤10,000,000  →  0.30%
+ *   >10,000,000  →  0.27%
+ */
+function getBrokerRate(amount) {
+    if (amount <=    50_000) return 0.0040;
+    if (amount <=   500_000) return 0.0037;
+    if (amount <= 2_000_000) return 0.0034;
+    if (amount <= 10_000_000) return 0.0030;
+    return 0.0027;
+}
+
+/**
+ * Calculates the full NEPSE sell cost breakdown and net P/L.
+ *
+ * Costs deducted from seller:
+ *   1. SEBON Commission  — 0.015% of total sell amount
+ *   2. Broker Commission — tiered rate (0.40% → 0.27%) on total sell amount
+ *   3. DP Fee            — flat Rs. 25 per company per sale
+ *   4. CGT               — 5% (long-term >1yr) or 7.5% (short-term) on NET profit only
+ *
+ * @param {number}  buyPrice   - WACC per share
+ * @param {number}  sellPrice  - Sell price per share
+ * @param {number}  quantity   - Shares sold
+ * @param {boolean} isLongTerm - true = >365 days holding → 5% CGT, false → 7.5%
+ */
+function calcNepseSell(buyPrice, sellPrice, quantity, isLongTerm = true) {
+    const totalBuyAmount  = buyPrice  * quantity;
+    const totalSellAmount = sellPrice * quantity;
+
+    const sebonFee  = totalSellAmount * 0.00015;                           // 0.015%
+    const brokerFee = totalSellAmount * getBrokerRate(totalSellAmount);    // tiered
+    const dpFee     = 25;                                                  // fixed
+
+    // Gross profit before CGT
+    const grossProfit = totalSellAmount - totalBuyAmount - sebonFee - brokerFee - dpFee;
+
+    // CGT: only on profit, never on a loss
+    const cgtRate = isLongTerm ? 0.05 : 0.075;
+    const cgt     = grossProfit > 0 ? grossProfit * cgtRate : 0;
+
+    const totalDeductions = sebonFee + brokerFee + dpFee + cgt;
+    const netReceiveAmount = totalSellAmount - totalDeductions;
+    const netPL            = netReceiveAmount - totalBuyAmount;
+    const netPLPercent     = totalBuyAmount > 0 ? (netPL / totalBuyAmount) * 100 : 0;
+
+    return {
+        totalBuyAmount:   +totalBuyAmount.toFixed(2),
+        totalSellAmount:  +totalSellAmount.toFixed(2),
+        sebonFee:         +sebonFee.toFixed(2),
+        brokerFee:        +brokerFee.toFixed(2),
+        dpFee,
+        cgt:              +cgt.toFixed(2),
+        cgtRate,
+        totalDeductions:  +totalDeductions.toFixed(2),
+        netReceiveAmount: +netReceiveAmount.toFixed(2),
+        netPL:            +netPL.toFixed(2),
+        netPLPercent:     +netPLPercent.toFixed(2),
+    };
+}
+
+// ─── PORTFOLIO FUNCTIONS ──────────────────────────────────────────────────────
 window.addStock = async () => {
-    const nameInput = document.getElementById("stockName");
-    const qtyInput = document.getElementById("quantity");
-    const waccInput = document.getElementById("wacc");
+    const name = $("stockName").value.toUpperCase().trim();
+    const qty  = parseFloat($("quantity").value);
+    const wacc = parseFloat($("wacc").value);
 
-    const name = nameInput.value.toUpperCase().trim();
-    const qty = parseFloat(qtyInput.value);
-    const wacc = parseFloat(waccInput.value);
-
-    if (!currentUser) return alert("Please Login with Google first!");
+    if (!currentUser)                      return alert("Please login with Google first!");
     if (!name || isNaN(qty) || isNaN(wacc)) return alert("Please fill all fields correctly!");
 
-    stocks.push({
-        name, quantity: qty, wacc, ltp: 0,
-        target: 0, stopLoss: 0,
-        targetHit: false, slHit: false
-    });
-
-    nameInput.value = ""; qtyInput.value = ""; waccInput.value = "";
+    stocks.push({ name, quantity: qty, wacc, ltp: 0, target: 0, stopLoss: 0, targetHit: false, slHit: false });
+    $("stockName").value = $("quantity").value = $("wacc").value = "";
 
     displayStocks();
     await saveToCloud();
@@ -104,25 +158,68 @@ window.addStock = async () => {
 };
 
 window.deleteStock = async (i) => {
-    if (confirm("Permanently delete this from cloud?")) {
-        stocks.splice(i, 1);
-        displayStocks();
-        await saveToCloud();
-    }
+    if (!confirm("Permanently delete this stock?")) return;
+    stocks.splice(i, 1);
+    displayStocks();
+    await saveToCloud();
 };
 
 window.sellStock = async (i) => {
-    const stock = stocks[i];
-    const sellPrice = prompt(`Enter Selling Price for ${stock.name}:`, stock.ltp);
-    if (sellPrice === null || isNaN(sellPrice) || parseFloat(sellPrice) <= 0) return;
+    const stock    = stocks[i];
+    const rawPrice = prompt(`Sell price for ${stock.name}:`, stock.ltp);
+    if (rawPrice === null) return;
+
+    const sellPrice = parseFloat(rawPrice);
+    if (isNaN(sellPrice) || sellPrice <= 0) return alert("Invalid sell price.");
+
+    // Ask holding period for correct CGT rate
+    const isLongTerm = confirm(
+        `Held ${stock.name} for more than 1 year?\n\nOK = Yes → 5% CGT\nCancel = No → 7.5% CGT`
+    );
+
+    const c = calcNepseSell(stock.wacc, sellPrice, stock.quantity, isLongTerm);
+    const plSign = c.netPL >= 0 ? "+" : "";
+
+    // Show full breakdown before confirming
+    const confirmed = confirm(
+        `━━━ SELL SUMMARY: ${stock.name} ━━━\n\n` +
+        `Qty             : ${stock.quantity} shares\n` +
+        `Buy (WACC)       : Rs. ${stock.wacc.toLocaleString()}\n` +
+        `Sell Price       : Rs. ${sellPrice.toLocaleString()}\n` +
+        `Total Sell Amt   : Rs. ${c.totalSellAmount.toLocaleString()}\n\n` +
+        `─── Deductions ───────────────\n` +
+        `SEBON (0.015%)   : Rs. ${c.sebonFee.toLocaleString()}\n` +
+        `Broker (${(getBrokerRate(c.totalSellAmount)*100).toFixed(2)}%)   : Rs. ${c.brokerFee.toLocaleString()}\n` +
+        `DP Charge        : Rs. ${c.dpFee}\n` +
+        `CGT (${(c.cgtRate * 100).toFixed(1)}%)        : Rs. ${c.cgt.toLocaleString()}\n` +
+        `Total Deductions : Rs. ${c.totalDeductions.toLocaleString()}\n\n` +
+        `─── Result ───────────────────\n` +
+        `Net Receive Amt  : Rs. ${c.netReceiveAmount.toLocaleString()}\n` +
+        `Net P/L          : ${plSign}Rs. ${c.netPL.toLocaleString()}\n` +
+        `Net P/L %        : ${plSign}${c.netPLPercent.toFixed(2)}%\n\n` +
+        `Confirm this sale?`
+    );
+    if (!confirmed) return;
 
     const soldData = {
-        name: stock.name,
-        quantity: stock.quantity,
-        buyPrice: stock.wacc,
-        sellPrice: parseFloat(sellPrice),
-        pl: (parseFloat(sellPrice) - stock.wacc) * stock.quantity,
-        date: new Date().toLocaleDateString()
+        name:             stock.name,
+        quantity:         stock.quantity,
+        buyPrice:         stock.wacc,
+        sellPrice,
+        isLongTerm,
+        // Full cost breakdown (stored for history display & auditing)
+        sebonFee:         c.sebonFee,
+        brokerFee:        c.brokerFee,
+        dpFee:            c.dpFee,
+        cgt:              c.cgt,
+        cgtRate:          c.cgtRate,
+        totalDeductions:  c.totalDeductions,
+        totalSellAmount:  c.totalSellAmount,
+        netReceiveAmount: c.netReceiveAmount,
+        // Summary
+        pl:               c.netPL,          // net P/L used for realized totals
+        netPLPercent:     c.netPLPercent,
+        date:             new Date().toLocaleDateString()
     };
 
     history.push(soldData);
@@ -131,7 +228,6 @@ window.sellStock = async (i) => {
     displayStocks();
     displayHistory();
     await saveToCloud();
-    alert(`Sold ${stock.name} successfully! Check 'Trade History' tab.`);
 };
 
 window.updateStock = async (i, field, value) => {
@@ -144,22 +240,15 @@ window.updateStock = async (i, field, value) => {
 };
 
 window.rollbackSale = async (i) => {
-    if (!confirm("Move this stock back to your active portfolio?")) return;
-
-    const soldItem = history[i];
-    if (!soldItem) return;
+    if (!confirm("Restore this stock to your active portfolio?")) return;
+    const sold = history[i];
+    if (!sold) return;
 
     stocks.push({
-        name: soldItem.name,
-        quantity: soldItem.quantity,
-        wacc: soldItem.buyPrice,
-        ltp: soldItem.sellPrice,
-        target: 0,
-        stopLoss: 0,
-        targetHit: false,
-        slHit: false
+        name: sold.name, quantity: sold.quantity,
+        wacc: sold.buyPrice, ltp: sold.sellPrice,
+        target: 0, stopLoss: 0, targetHit: false, slHit: false
     });
-
     history.splice(i, 1);
 
     displayStocks();
@@ -168,175 +257,158 @@ window.rollbackSale = async (i) => {
     alert("Stock restored to active portfolio!");
 };
 
-// --- TAB SWITCHING ---
+// ─── TAB SWITCHING ────────────────────────────────────────────────────────────
 window.switchTab = (tab) => {
-    const pView = document.getElementById('portfolio-view');
-    const hView = document.getElementById('history-view');
-    const pTab = document.getElementById('tab-portfolio');
-    const hTab = document.getElementById('tab-history');
-
+    const isPortfolio = tab === 'portfolio';
+    const pView = $('portfolio-view'), hView = $('history-view');
+    const pTab  = $('tab-portfolio'),  hTab  = $('tab-history');
     if (!pView || !hView) return;
 
-    if (tab === 'portfolio') {
-        pView.style.display = 'block';
-        hView.style.display = 'none';
-        if (pTab) pTab.classList.add('active');
-        if (hTab) hTab.classList.remove('active');
-    } else {
-        pView.style.display = 'none';
-        hView.style.display = 'block';
-        if (hTab) hTab.classList.add('active');
-        if (pTab) pTab.classList.remove('active');
-        displayHistory();
-    }
+    pView.style.display = isPortfolio ? 'block' : 'none';
+    hView.style.display = isPortfolio ? 'none'  : 'block';
+    pTab?.classList.toggle('active',  isPortfolio);
+    hTab?.classList.toggle('active', !isPortfolio);
+
+    if (!isPortfolio) displayHistory();
 };
 
 window.sortStocks = (field) => {
-    if (field === 'name') stocks.sort((a, b) => a.name.localeCompare(b.name));
-    else if (field === 'profitLoss') {
-        stocks.sort((a, b) => {
-            const plA = (a.ltp - a.wacc) * a.quantity;
-            const plB = (b.ltp - b.wacc) * b.quantity;
-            return plB - plA;
-        });
-    }
+    if (field === 'name')
+        stocks.sort((a, b) => a.name.localeCompare(b.name));
+    else if (field === 'profitLoss')
+        stocks.sort((a, b) => ((b.ltp - b.wacc) * b.quantity) - ((a.ltp - a.wacc) * a.quantity));
     displayStocks();
 };
 
-// --- UI RENDERING ---
+// ─── UI RENDERING ─────────────────────────────────────────────────────────────
 function displayStocks() {
-    const stockList = document.getElementById("stockList");
-    if (!stockList) return;
-    stockList.innerHTML = "";
+    const list = $("stockList");
+    if (!list) return;
 
     let totalVal = 0, totalInv = 0;
 
-    stocks.forEach((stock, i) => {
-        const amount = stock.ltp * stock.quantity;
-        const investment = stock.wacc * stock.quantity;
-        const pl = amount - investment;
-        const plPercent = investment > 0 ? (pl / investment) * 100 : 0;
-
+    // Build all rows as a string and set once — avoids repeated reflows
+    list.innerHTML = stocks.map((s, i) => {
+        const amount = s.ltp   * s.quantity;
+        const invest = s.wacc  * s.quantity;
+        const pl     = amount  - invest;
+        const plPct  = invest > 0 ? (pl / invest) * 100 : 0;
         totalVal += amount;
-        totalInv += investment;
-
-        stockList.innerHTML += `<tr>
-            <td>${stock.name}</td>
-            <td contenteditable="true" onblur="updateStock(${i}, 'quantity', this.innerText)">${stock.quantity}</td>
-            <td contenteditable="true" onblur="updateStock(${i}, 'wacc', this.innerText)">${stock.wacc}</td>
-            <td class="ltp-cell">${stock.ltp.toFixed(2)}</td>
+        totalInv += invest;
+        const cls = pl >= 0 ? 'profit' : 'loss';
+        return `<tr>
+            <td>${s.name}</td>
+            <td contenteditable="true" onblur="updateStock(${i},'quantity',this.innerText)">${s.quantity}</td>
+            <td contenteditable="true" onblur="updateStock(${i},'wacc',this.innerText)">${s.wacc}</td>
+            <td class="ltp-cell">${s.ltp.toFixed(2)}</td>
             <td>${amount.toFixed(2)}</td>
-            <td contenteditable="true" onblur="updateStock(${i}, 'target', this.innerText)">${stock.target || 0}</td>
-            <td contenteditable="true" onblur="updateStock(${i}, 'stopLoss', this.innerText)">${stock.stopLoss || 0}</td>
-            <td class="${pl >= 0 ? 'profit' : 'loss'}">${pl.toFixed(2)}</td>
-            <td class="${pl >= 0 ? 'profit' : 'loss'}">${plPercent.toFixed(2)}%</td>
+            <td contenteditable="true" onblur="updateStock(${i},'target',this.innerText)">${s.target || 0}</td>
+            <td contenteditable="true" onblur="updateStock(${i},'stopLoss',this.innerText)">${s.stopLoss || 0}</td>
+            <td class="${cls}">${pl.toFixed(2)}</td>
+            <td class="${cls}">${plPct.toFixed(2)}%</td>
             <td>
                 <button onclick="sellStock(${i})" class="btn-sell">Sell</button>
                 <button onclick="deleteStock(${i})" class="btn-danger">✕</button>
             </td>
         </tr>`;
-    });
+    }).join('');
 
     updateDashboard(totalInv, totalVal);
 }
 
-// ✅ FIX: Corrected forEach syntax — was missing opening parenthesis
 function displayHistory() {
-    const hList = document.getElementById("historyList");
+    const hList = $("historyList");
     if (!hList) return;
 
-    hList.innerHTML = "";
-    let totalRealizedPL = 0;
+    let totalNetPL = 0;
 
-    history.forEach((item, i) => {
-        totalRealizedPL += item.pl;
-        const plClass = item.pl >= 0 ? 'profit' : 'loss';
-        hList.innerHTML += `<tr>
-            <td>${item.name}</td>
+    hList.innerHTML = history.map((item, i) => {
+        totalNetPL += item.pl;
+        const cls = item.pl >= 0 ? 'profit' : 'loss';
+        const plSign = item.pl >= 0 ? '+' : '';
+        // Gracefully handle legacy records without the new cost fields
+        const hasBreakdown = item.netReceiveAmount !== undefined;
+        const costTip = hasBreakdown
+            ? `title="SEBON: Rs.${item.sebonFee} | Broker: Rs.${item.brokerFee} | DP: Rs.${item.dpFee} | CGT: Rs.${item.cgt}"`
+            : '';
+
+        return `<tr>
+            <td><strong>${item.name}</strong></td>
             <td>${item.quantity}</td>
-            <td>${item.buyPrice.toFixed(2)}</td>
-            <td>${item.sellPrice.toFixed(2)}</td>
-            <td class="${plClass}">${item.pl.toFixed(2)}</td>
+            <td>Rs. ${item.buyPrice.toFixed(2)}</td>
+            <td>Rs. ${item.sellPrice.toFixed(2)}</td>
+            <td>${hasBreakdown ? `Rs. ${item.netReceiveAmount.toLocaleString()}` : '—'}</td>
+            <td class="${cls}">${plSign}Rs. ${item.pl.toFixed(2)}</td>
+            <td class="${cls}">${item.netPLPercent !== undefined ? plSign + item.netPLPercent.toFixed(2) + '%' : '—'}</td>
+            <td>${hasBreakdown ? `<span class="cost-tip" ${costTip}>ⓘ Costs</span>` : '—'}</td>
             <td>${item.date}</td>
             <td><button onclick="rollbackSale(${i})" class="btn-rollback">Undo</button></td>
         </tr>`;
-    });
+    }).join('');
 
-    // Update realized P/L summary card if it exists
-    const realizedEl = document.getElementById("realizedPL");
+    const realizedEl = $("realizedPL");
     if (realizedEl) {
-        realizedEl.textContent = totalRealizedPL.toLocaleString(undefined, { minimumFractionDigits: 2 });
-        realizedEl.className = `value ${totalRealizedPL >= 0 ? 'profit' : 'loss'}`;
+        const sign = totalNetPL >= 0 ? '+' : '';
+        realizedEl.textContent = `${sign}Rs. ${totalNetPL.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+        realizedEl.className   = `value ${totalNetPL >= 0 ? 'profit' : 'loss'}`;
     }
 }
 
 function updateDashboard(inv, val) {
-    const invEl = document.getElementById("currentInvestment");
-    const valEl = document.getElementById("currentValue");
-    const plEl = document.getElementById("totalProfitLoss");
-
-    if (invEl) invEl.textContent = inv.toLocaleString();
-    if (valEl) valEl.textContent = val.toLocaleString();
-
     const pl = val - inv;
-    if (plEl) {
-        plEl.textContent = pl.toLocaleString();
-        plEl.className = `value ${pl >= 0 ? 'profit' : 'loss'}`;
+    if ($("currentInvestment")) $("currentInvestment").textContent = inv.toLocaleString();
+    if ($("currentValue"))      $("currentValue").textContent      = val.toLocaleString();
+    if ($("totalProfitLoss")) {
+        $("totalProfitLoss").textContent = pl.toLocaleString();
+        $("totalProfitLoss").className   = `value ${pl >= 0 ? 'profit' : 'loss'}`;
     }
 }
 
-// --- LTP FETCHING ---
+// ─── LTP FETCHING ─────────────────────────────────────────────────────────────
 async function fetchAllLTPs() {
     if (!stocks.length) return;
-    const statusTag = document.getElementById("lastUpdated");
-    if (statusTag) statusTag.innerText = "Syncing...";
+    setStatus("⟳ Syncing live prices...", "warn");
 
-    for (let i = 0; i < stocks.length; i++) {
+    // Fetch all LTPs in parallel instead of sequentially — much faster
+    await Promise.all(stocks.map(async (stock, i) => {
         try {
-            const resp = await fetch(`${BACKEND_URL}/api/ltp?symbol=${stocks[i].name}`);
-            if (resp.ok) {
-                const data = await resp.json();
-                const newLtp = Number(data.ltp) || 0;
-                const stock = stocks[i];
+            const resp = await fetch(`${BACKEND_URL}/api/ltp?symbol=${stock.name}`);
+            if (!resp.ok) return;
+            const newLtp = Number((await resp.json()).ltp) || 0;
 
-                if (stock.target > 0 && newLtp >= stock.target) {
-                    if (!stock.targetHit) {
-                        triggerAlert(`🎯 TARGET REACHED: ${stock.name} is at ${newLtp}`);
-                        stock.targetHit = true;
-                        await saveToCloud();
-                    }
-                } else if (newLtp < stock.target) {
-                    stock.targetHit = false;
-                }
-
-                if (stock.stopLoss > 0 && newLtp <= stock.stopLoss) {
-                    if (!stock.slHit) {
-                        triggerAlert(`⚠️ STOP LOSS HIT: ${stock.name} dropped to ${newLtp}`);
-                        stock.slHit = true;
-                        await saveToCloud();
-                    }
-                } else if (newLtp > stock.stopLoss) {
-                    stock.slHit = false;
-                }
-
-                stocks[i].ltp = newLtp;
+            // Target hit alert (one-time)
+            if (stock.target > 0 && newLtp >= stock.target && !stock.targetHit) {
+                triggerAlert(`🎯 TARGET HIT: ${stock.name} at Rs. ${newLtp}`);
+                stock.targetHit = true;
+            } else if (newLtp < stock.target) {
+                stock.targetHit = false;
             }
-        } catch (e) { console.error("Fetch error for " + stocks[i].name, e); }
-    }
+
+            // Stop-loss alert (one-time)
+            if (stock.stopLoss > 0 && newLtp <= stock.stopLoss && !stock.slHit) {
+                triggerAlert(`⚠️ STOP LOSS: ${stock.name} dropped to Rs. ${newLtp}`);
+                stock.slHit = true;
+            } else if (newLtp > stock.stopLoss) {
+                stock.slHit = false;
+            }
+
+            stocks[i].ltp = newLtp;
+        } catch (e) { console.error(`LTP fetch failed for ${stock.name}:`, e); }
+    }));
 
     displayStocks();
-    if (statusTag) statusTag.innerText = `Last Sync: ${new Date().toLocaleTimeString()}`;
+    // Always persist latest LTPs so next refresh shows correct Current Value instantly
+    await saveToCloud();
+    setStatus(`✓ Live · Last sync: ${new Date().toLocaleTimeString()}`);
 }
 
 function triggerAlert(message) {
     alert(message);
-    if (Notification.permission === "granted") {
-        new Notification("NEPSE Portfolio Alert", { body: message });
-    }
+    if (Notification.permission === "granted")
+        new Notification("NEPSE Alert", { body: message });
 }
 
-if (window.Notification && Notification.permission !== "granted") {
+if (window.Notification && Notification.permission !== "granted")
     Notification.requestPermission();
-}
 
 setInterval(fetchAllLTPs, 60000);
