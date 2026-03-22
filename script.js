@@ -146,9 +146,8 @@ window.sellStock = async (i) => {
 
     // 5. Refresh UI and Sync Cloud
     displayStocks();
-    if (document.getElementById('history-view').style.display === 'block') {
-        displayHistory();
-    }
+    displayHistory();
+
     await saveToCloud();
     alert(`Sold ${stock.name} successfully! Check 'Trade History' tab.`);
 };
