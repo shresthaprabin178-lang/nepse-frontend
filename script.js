@@ -64,17 +64,19 @@ onAuthStateChanged(auth, async (user) => {
         // Load existing cloud data
         const docSnap = await getDoc(doc(db, "users", user.uid));
         if (docSnap.exists()) {
-            stocks = docSnap.data().stocks || []; // load active portfolio
-            history = data.history || []; // Load sold history (CRITICAL UPDATE)
+            const data = docSnap.data(); // we define 'data' here
+            
+            stocks = data.stocks || []; 
+            history = data.history || []; // Now 'data' is defined!
+            
             displayStocks();
-            displayHistory();
+            displayHistory(); 
             fetchAllLTPs();
         }
     } else {
         currentUser = null;
         if(loginBtn) loginBtn.style.display = "block";
         if(userInfo) userInfo.style.display = "none";
-        // Clear local data on logout for safety
         stocks = [];
         history = [];
     }
@@ -159,30 +161,31 @@ window.updateStock = async (i, field, value) => {
     }
 };
 window.rollbackSale = async (i) => {
-    if (!confirm("Mistakenly sold? This will move the stock back to your active portfolio.")) return;
+    if (!confirm("Move this stock back to your active portfolio?")) return;
 
     const soldItem = history[i];
+    if (!soldItem) return;
 
-    // Create the active stock object again
     const restoredStock = {
         name: soldItem.name,
         quantity: soldItem.quantity,
         wacc: soldItem.buyPrice,
-        ltp: soldItem.sellPrice, // Set LTP to last sold price until next sync
+        ltp: soldItem.sellPrice,
         target: 0,
-        stopLoss: 0
+        stopLoss: 0,
+        targetHit: false, // Prevents notification loops
+        slHit: false
     };
 
-    // Move data back
-    stocks.push(restoredStock); // Back to Active
-    history.splice(i, 1);       // Remove from History
+    stocks.push(restoredStock);
+    history.splice(i, 1);
 
-    // Refresh UI
     displayStocks();
     displayHistory();
     
-    // Save to Cloud
+    // This sends the updated 'stocks' and 'history' to Firebase
     await saveToCloud();
+    alert("Stock restored successfully!");
 };
 // --- TAB SWITCHING LOGIC ---
 window.switchTab = (tab) => {
