@@ -2,7 +2,6 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebas
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-// --- YOUR FIREBASE CONFIG ---
 const firebaseConfig = {
   apiKey: "AIzaSyBowvP1x1od-RijlwT3gAoTzq5yiZ-faz4",
   authDomain: "nepsetracker1.firebaseapp.com",
@@ -13,31 +12,30 @@ const firebaseConfig = {
   measurementId: "G-L7GT9WQNED"
 };
 
-// Initialize
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
 
 let stocks = [];
-let history=[];
+let history = [];
 let currentUser = null;
 const BACKEND_URL = "https://nepse-live-backend-1.onrender.com";
 
-// --- CLOUD SYNC HELPERS ---
+// --- CLOUD SYNC ---
 async function saveToCloud() {
     if (currentUser) {
         try {
-            await setDoc(doc(db, "users", currentUser.uid), { stocks: stocks, history: history });
+            await setDoc(doc(db, "users", currentUser.uid), { stocks, history });
         } catch (e) { console.error("Cloud Save Failed:", e); }
     }
 }
 
-// --- AUTH FUNCTIONS ---
+// --- AUTH ---
 window.handleLogin = async () => {
-    try { 
-        await signInWithPopup(auth, provider); 
-    } catch (e) { 
+    try {
+        await signInWithPopup(auth, provider);
+    } catch (e) {
         console.error("Login Error:", e);
         alert("Login failed. Check your Firebase popup settings.");
     }
@@ -53,36 +51,33 @@ window.handleLogout = () => {
 onAuthStateChanged(auth, async (user) => {
     const loginBtn = document.getElementById("login-btn");
     const userInfo = document.getElementById("user-info");
-    
+
     if (user) {
         currentUser = user;
-        if(loginBtn) loginBtn.style.display = "none";
-        if(userInfo) userInfo.style.display = "flex";
+        if (loginBtn) loginBtn.style.display = "none";
+        if (userInfo) userInfo.style.display = "flex";
         document.getElementById("user-name").innerText = user.displayName;
         document.getElementById("user-pic").src = user.photoURL;
-        
-        // Load existing cloud data
+
         const docSnap = await getDoc(doc(db, "users", user.uid));
         if (docSnap.exists()) {
-            const data = docSnap.data(); // we define 'data' here
-            
-            stocks = data.stocks || []; 
-            history = data.history || []; // Now 'data' is defined!
-            
+            const data = docSnap.data();
+            stocks = data.stocks || [];
+            history = data.history || [];
             displayStocks();
-            displayHistory(); 
+            displayHistory();
             fetchAllLTPs();
         }
     } else {
         currentUser = null;
-        if(loginBtn) loginBtn.style.display = "block";
-        if(userInfo) userInfo.style.display = "none";
+        if (loginBtn) loginBtn.style.display = "block";
+        if (userInfo) userInfo.style.display = "none";
         stocks = [];
         history = [];
     }
 });
 
-// --- CORE PORTFOLIO FUNCTIONS ---
+// --- PORTFOLIO FUNCTIONS ---
 window.addStock = async () => {
     const nameInput = document.getElementById("stockName");
     const qtyInput = document.getElementById("quantity");
@@ -95,42 +90,32 @@ window.addStock = async () => {
     if (!currentUser) return alert("Please Login with Google first!");
     if (!name || isNaN(qty) || isNaN(wacc)) return alert("Please fill all fields correctly!");
 
-    stocks.push({ 
-        name, 
-        quantity: qty, 
-        wacc, 
-        ltp: 0, 
-        target: 0, 
-        stopLoss: 0,
-        targetHit: false, // Prevents repeated target notifications
-        slHit: false      // Prevents repeated stop-loss notifications
+    stocks.push({
+        name, quantity: qty, wacc, ltp: 0,
+        target: 0, stopLoss: 0,
+        targetHit: false, slHit: false
     });
-    
-    // Clear inputs
+
     nameInput.value = ""; qtyInput.value = ""; waccInput.value = "";
-    
+
     displayStocks();
     await saveToCloud();
     fetchAllLTPs();
 };
 
 window.deleteStock = async (i) => {
-    if(confirm("Permanently delete this from cloud?")) {
+    if (confirm("Permanently delete this from cloud?")) {
         stocks.splice(i, 1);
         displayStocks();
         await saveToCloud();
     }
 };
+
 window.sellStock = async (i) => {
     const stock = stocks[i];
-    
-    // 1. Ask for Sell Price
     const sellPrice = prompt(`Enter Selling Price for ${stock.name}:`, stock.ltp);
-    
-    // 2. Validate input
-    if (sellPrice === null || isNaN(sellPrice) || sellPrice <= 0) return;
+    if (sellPrice === null || isNaN(sellPrice) || parseFloat(sellPrice) <= 0) return;
 
-    // 3. Create the History Object
     const soldData = {
         name: stock.name,
         quantity: stock.quantity,
@@ -140,17 +125,15 @@ window.sellStock = async (i) => {
         date: new Date().toLocaleDateString()
     };
 
-    // 4. Move data
-    history.push(soldData); // Add to history array
-    stocks.splice(i, 1);    // Remove from active array
+    history.push(soldData);
+    stocks.splice(i, 1);
 
-    // 5. Refresh UI and Sync Cloud
     displayStocks();
     displayHistory();
-
     await saveToCloud();
     alert(`Sold ${stock.name} successfully! Check 'Trade History' tab.`);
 };
+
 window.updateStock = async (i, field, value) => {
     const val = parseFloat(value);
     if (!isNaN(val)) {
@@ -159,61 +142,51 @@ window.updateStock = async (i, field, value) => {
         displayStocks();
     }
 };
+
 window.rollbackSale = async (i) => {
     if (!confirm("Move this stock back to your active portfolio?")) return;
 
     const soldItem = history[i];
     if (!soldItem) return;
 
-    const restoredStock = {
+    stocks.push({
         name: soldItem.name,
         quantity: soldItem.quantity,
         wacc: soldItem.buyPrice,
         ltp: soldItem.sellPrice,
         target: 0,
         stopLoss: 0,
-        targetHit: false, // Prevents notification loops
+        targetHit: false,
         slHit: false
-    };
+    });
 
-    stocks.push(restoredStock);
     history.splice(i, 1);
 
     displayStocks();
     displayHistory();
-    
-    // This sends the updated 'stocks' and 'history' to Firebase
     await saveToCloud();
-    alert("Stock restored successfully!");
+    alert("Stock restored to active portfolio!");
 };
-// --- TAB SWITCHING LOGIC ---
+
+// --- TAB SWITCHING ---
 window.switchTab = (tab) => {
     const pView = document.getElementById('portfolio-view');
     const hView = document.getElementById('history-view');
     const pTab = document.getElementById('tab-portfolio');
     const hTab = document.getElementById('tab-history');
 
-    // Safety check: make sure elements exist before trying to style them
     if (!pView || !hView) return;
 
     if (tab === 'portfolio') {
-        // Show Portfolio, Hide History
         pView.style.display = 'block';
         hView.style.display = 'none';
-        
-        // Update button colors
-        if(pTab) pTab.classList.add('active');
-        if(hTab) hTab.classList.remove('active');
+        if (pTab) pTab.classList.add('active');
+        if (hTab) hTab.classList.remove('active');
     } else {
-        // Hide Portfolio, Show History
         pView.style.display = 'none';
         hView.style.display = 'block';
-        
-        // Update button colors
-        if(hTab) hTab.classList.add('active');
-        if(pTab) pTab.classList.remove('active');
-        
-        // Refresh the history table data
+        if (hTab) hTab.classList.add('active');
+        if (pTab) pTab.classList.remove('active');
         displayHistory();
     }
 };
@@ -230,12 +203,12 @@ window.sortStocks = (field) => {
     displayStocks();
 };
 
-// --- UI & DATA FETCHING ---
+// --- UI RENDERING ---
 function displayStocks() {
     const stockList = document.getElementById("stockList");
     if (!stockList) return;
     stockList.innerHTML = "";
-    
+
     let totalVal = 0, totalInv = 0;
 
     stocks.forEach((stock, i) => {
@@ -244,10 +217,10 @@ function displayStocks() {
         const pl = amount - investment;
         const plPercent = investment > 0 ? (pl / investment) * 100 : 0;
 
-        totalVal += amount; 
+        totalVal += amount;
         totalInv += investment;
 
-        const row = `<tr>
+        stockList.innerHTML += `<tr>
             <td>${stock.name}</td>
             <td contenteditable="true" onblur="updateStock(${i}, 'quantity', this.innerText)">${stock.quantity}</td>
             <td contenteditable="true" onblur="updateStock(${i}, 'wacc', this.innerText)">${stock.wacc}</td>
@@ -262,36 +235,39 @@ function displayStocks() {
                 <button onclick="deleteStock(${i})" class="btn-danger">✕</button>
             </td>
         </tr>`;
-        stockList.innerHTML += row;
     });
+
     updateDashboard(totalInv, totalVal);
 }
+
+// ✅ FIX: Corrected forEach syntax — was missing opening parenthesis
 function displayHistory() {
     const hList = document.getElementById("historyList");
     if (!hList) return;
-    
+
     hList.innerHTML = "";
     let totalRealizedPL = 0;
 
-    history.forEach(item, i) => {
+    history.forEach((item, i) => {
         totalRealizedPL += item.pl;
-        const row = `
-            <tr>
-                <td>${item.name}</td>
-                <td>${item.quantity}</td>
-                <td>${item.buyPrice.toFixed(2)}</td>
-                <td>${item.sellPrice.toFixed(2)}</td>
-                <td class="${item.pl >= 0 ? 'profit' : 'loss'}">${item.pl.toFixed(2)}</td>
-                <td>${item.date}</td>
-                <td>
-                    <button onclick="rollbackSale(${i})" class="btn-rollback">Undo</button>
-                </td>
-            </tr>`;
-        hList.innerHTML += row;
+        const plClass = item.pl >= 0 ? 'profit' : 'loss';
+        hList.innerHTML += `<tr>
+            <td>${item.name}</td>
+            <td>${item.quantity}</td>
+            <td>${item.buyPrice.toFixed(2)}</td>
+            <td>${item.sellPrice.toFixed(2)}</td>
+            <td class="${plClass}">${item.pl.toFixed(2)}</td>
+            <td>${item.date}</td>
+            <td><button onclick="rollbackSale(${i})" class="btn-rollback">Undo</button></td>
+        </tr>`;
     });
 
-    // Optional: Log total realized profit to console for now
-    console.log("Total Realized P/L: ", totalRealizedPL);
+    // Update realized P/L summary card if it exists
+    const realizedEl = document.getElementById("realizedPL");
+    if (realizedEl) {
+        realizedEl.textContent = totalRealizedPL.toLocaleString(undefined, { minimumFractionDigits: 2 });
+        realizedEl.className = `value ${totalRealizedPL >= 0 ? 'profit' : 'loss'}`;
+    }
 }
 
 function updateDashboard(inv, val) {
@@ -299,20 +275,21 @@ function updateDashboard(inv, val) {
     const valEl = document.getElementById("currentValue");
     const plEl = document.getElementById("totalProfitLoss");
 
-    if(invEl) invEl.textContent = inv.toLocaleString();
-    if(valEl) valEl.textContent = val.toLocaleString();
-    
+    if (invEl) invEl.textContent = inv.toLocaleString();
+    if (valEl) valEl.textContent = val.toLocaleString();
+
     const pl = val - inv;
-    if(plEl) {
+    if (plEl) {
         plEl.textContent = pl.toLocaleString();
         plEl.className = `value ${pl >= 0 ? 'profit' : 'loss'}`;
     }
 }
 
+// --- LTP FETCHING ---
 async function fetchAllLTPs() {
     if (!stocks.length) return;
     const statusTag = document.getElementById("lastUpdated");
-    if(statusTag) statusTag.innerText = "Syncing...";
+    if (statusTag) statusTag.innerText = "Syncing...";
 
     for (let i = 0; i < stocks.length; i++) {
         try {
@@ -320,50 +297,46 @@ async function fetchAllLTPs() {
             if (resp.ok) {
                 const data = await resp.json();
                 const newLtp = Number(data.ltp) || 0;
-                const stock = stocks[i]; // Reference to the current stock
-                
-                // --- Updated Notification Logic with "One-Time" Flags ---
-                // 🎯 Check Target
+                const stock = stocks[i];
+
                 if (stock.target > 0 && newLtp >= stock.target) {
-                    if (!stock.targetHit) { // Only alert if we haven't hit it yet
+                    if (!stock.targetHit) {
                         triggerAlert(`🎯 TARGET REACHED: ${stock.name} is at ${newLtp}`);
-                        stock.targetHit = true; // Mark as notified
-                        await saveToCloud(); // Save state so it doesn't alert after refresh
+                        stock.targetHit = true;
+                        await saveToCloud();
                     }
                 } else if (newLtp < stock.target) {
-                    stock.targetHit = false; // Reset if price falls back below target
+                    stock.targetHit = false;
                 }
-                // ⚠️ Check Stop Loss
+
                 if (stock.stopLoss > 0 && newLtp <= stock.stopLoss) {
-                    if (!stock.slHit) { // Only alert if we haven't hit it yet
+                    if (!stock.slHit) {
                         triggerAlert(`⚠️ STOP LOSS HIT: ${stock.name} dropped to ${newLtp}`);
-                        stock.slHit = true; // Mark as notified
+                        stock.slHit = true;
                         await saveToCloud();
                     }
                 } else if (newLtp > stock.stopLoss) {
-                    stock.slHit = false; // Reset if price recovers
+                    stock.slHit = false;
                 }
+
                 stocks[i].ltp = newLtp;
             }
         } catch (e) { console.error("Fetch error for " + stocks[i].name, e); }
     }
+
     displayStocks();
-    if(statusTag) statusTag.innerText = `Last Sync: ${new Date().toLocaleTimeString()}`;
+    if (statusTag) statusTag.innerText = `Last Sync: ${new Date().toLocaleTimeString()}`;
 }
 
-// Helper function to handle the alert
 function triggerAlert(message) {
-    // 1. Show a browser popup
     alert(message);
-    
-    // 2. Use the Web Notification API (for desktop bubbles)
     if (Notification.permission === "granted") {
         new Notification("NEPSE Portfolio Alert", { body: message });
     }
 }
-// Request notification permission on page load
+
 if (window.Notification && Notification.permission !== "granted") {
     Notification.requestPermission();
 }
-// Update every 60 seconds
+
 setInterval(fetchAllLTPs, 60000);

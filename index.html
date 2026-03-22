@@ -40,15 +40,15 @@
             <div class="stats-grid">
                 <div class="stat-card">
                     <span>Total Investment</span>
-                    <h2 id="currentInvestment">0.00</h2>
+                    <h2 id="currentInvestment" class="value">0.00</h2>
                 </div>
                 <div class="stat-card">
                     <span>Current Value</span>
-                    <h2 id="currentValue">0.00</h2>
+                    <h2 id="currentValue" class="value">0.00</h2>
                 </div>
                 <div class="stat-card">
-                    <span>Total P/L</span>
-                    <h2 id="totalProfitLoss">0.00</h2>
+                    <span>Unrealised P/L</span>
+                    <h2 id="totalProfitLoss" class="value">0.00</h2>
                 </div>
             </div>
 
@@ -71,6 +71,7 @@
                             <th>Target</th>
                             <th>Stop Loss</th>
                             <th onclick="sortStocks('profitLoss')">P/L ↕</th>
+                            <th>P/L %</th>  <!-- ✅ FIX: Added missing column header -->
                             <th>Action</th>
                         </tr>
                     </thead>
@@ -80,8 +81,16 @@
         </div>
 
         <div id="history-view" style="display: none;">
+            <!-- Realized P/L summary card -->
+            <div class="stats-grid" style="margin-bottom: 20px;">
+                <div class="stat-card">
+                    <span>Total Realised P/L</span>
+                    <h2 id="realizedPL" class="value">0.00</h2>
+                </div>
+            </div>
+
             <div class="table-card card">
-                <h2 style="padding: 20px; color: #f0b90b;">Realized Profits (Sold History)</h2>
+                <h2 style="padding: 20px; color: #f0b90b;">Realised Profits (Sold History)</h2>
                 <table>
                     <thead>
                         <tr>
@@ -91,7 +100,7 @@
                             <th>Sold @</th>
                             <th>Net P/L</th>
                             <th>Date</th>
-                            <th>Action </th>
+                            <th>Action</th>
                         </tr>
                     </thead>
                     <tbody id="historyList"></tbody>
