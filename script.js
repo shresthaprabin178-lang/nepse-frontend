@@ -273,7 +273,7 @@ function displayHistory() {
     hList.innerHTML = "";
     let totalRealizedPL = 0;
 
-    history.forEach(item => {
+    history.forEach(item, i) => {
         totalRealizedPL += item.pl;
         const row = `
             <tr>
