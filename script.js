@@ -165,71 +165,75 @@ window.deleteStock = async (i) => {
 };
 
 window.sellStock = async (i) => {
-    const stock    = stocks[i];
+    const stock = stocks[i];
+    
+    // 1. Ask for QUANTITY to sell
+    const rawQty = prompt(`How many shares of ${stock.name} do you want to sell? (Available: ${stock.quantity})`, stock.quantity);
+    if (rawQty === null) return;
+    const qtyToSell = parseFloat(rawQty);
+    
+    if (isNaN(qtyToSell) || qtyToSell <= 0 || qtyToSell > stock.quantity) {
+        return alert("Invalid quantity. Please enter a number between 1 and " + stock.quantity);
+    }
+
+    // 2. Ask for PRICE
     const rawPrice = prompt(`Sell price for ${stock.name}:`, stock.ltp);
     if (rawPrice === null) return;
-
     const sellPrice = parseFloat(rawPrice);
     if (isNaN(sellPrice) || sellPrice <= 0) return alert("Invalid sell price.");
 
-    // Ask holding period for correct CGT rate
+    // 3. Ask for HOLDING PERIOD (CGT Rate)
     const isLongTerm = confirm(
-        `Held ${stock.name} for more than 1 year?\n\nOK = Yes → 5% CGT\nCancel = No → 7.5% CGT`
+        `Holding Period for ${qtyToSell} shares:\n\nOK = >1 Year (5% CGT)\nCancel = <1 Year (7.5% CGT)`
     );
 
-    const c = calcNepseSell(stock.wacc, sellPrice, stock.quantity, isLongTerm);
+    // 4. Perform Calculations (Using your existing calcNepseSell helper)
+    const c = calcNepseSell(stock.wacc, sellPrice, qtyToSell, isLongTerm);
     const plSign = c.netPL >= 0 ? "+" : "";
 
-    // Show full breakdown before confirming
+    // 5. THE DYNAMIC BREAKDOWN WINDOW
     const confirmed = confirm(
-        `━━━ SELL SUMMARY: ${stock.name} ━━━\n\n` +
-        `Qty             : ${stock.quantity} shares\n` +
-        `Buy (WACC)       : Rs. ${stock.wacc.toLocaleString()}\n` +
-        `Sell Price       : Rs. ${sellPrice.toLocaleString()}\n` +
-        `Total Sell Amt   : Rs. ${c.totalSellAmount.toLocaleString()}\n\n` +
-        `─── Deductions ───────────────\n` +
-        `SEBON (0.015%)   : Rs. ${c.sebonFee.toLocaleString()}\n` +
-        `Broker (${(getBrokerRate(c.totalSellAmount)*100).toFixed(2)}%)   : Rs. ${c.brokerFee.toLocaleString()}\n` +
-        `DP Charge        : Rs. ${c.dpFee}\n` +
-        `CGT (${(c.cgtRate * 100).toFixed(1)}%)        : Rs. ${c.cgt.toLocaleString()}\n` +
-        `Total Deductions : Rs. ${c.totalDeductions.toLocaleString()}\n\n` +
-        `─── Result ───────────────────\n` +
-        `Net Receive Amt  : Rs. ${c.netReceiveAmount.toLocaleString()}\n` +
-        `Net P/L          : ${plSign}Rs. ${c.netPL.toLocaleString()}\n` +
-        `Net P/L %        : ${plSign}${c.netPLPercent.toFixed(2)}%\n\n` +
-        `Confirm this sale?`
+        `📊 SELL CALCULATION: ${stock.name}\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `Selling: ${qtyToSell} / ${stock.quantity} shares\n` +
+        `Rate: Rs. ${sellPrice.toLocaleString()}\n` +
+        `Total Amount: Rs. ${c.totalSellAmount.toLocaleString()}\n\n` +
+        `📉 DEDUCTIONS:\n` +
+        `• Broker Fee (${(getBrokerRate(c.totalSellAmount)*100).toFixed(2)}%): Rs. ${c.brokerFee.toLocaleString()}\n` +
+        `• SEBON Fee (0.015%): Rs. ${c.sebonFee.toLocaleString()}\n` +
+        `• DP Charge: Rs. ${c.dpFee}\n` +
+        `• CGT (${(c.cgtRate * 100).toFixed(1)}%): Rs. ${c.cgt.toLocaleString()}\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `💰 NET RECEIVABLE: Rs. ${c.netReceiveAmount.toLocaleString()}\n` +
+        `📈 NET P/L: ${plSign}Rs. ${c.netPL.toLocaleString()} (${plSign}${c.netPLPercent.toFixed(2)}%)\n\n` +
+        `Confirm this partial sale?`
     );
+
     if (!confirmed) return;
 
+    // 6. EXECUTE SALE
     const soldData = {
-        name:             stock.name,
-        quantity:         stock.quantity,
-        buyPrice:         stock.wacc,
+        name: stock.name,
+        quantity: qtyToSell,
+        buyPrice: stock.wacc,
         sellPrice,
         isLongTerm,
-        // Full cost breakdown (stored for history display & auditing)
-        sebonFee:         c.sebonFee,
-        brokerFee:        c.brokerFee,
-        dpFee:            c.dpFee,
-        cgt:              c.cgt,
-        cgtRate:          c.cgtRate,
-        totalDeductions:  c.totalDeductions,
-        totalSellAmount:  c.totalSellAmount,
-        netReceiveAmount: c.netReceiveAmount,
-        // Summary
-        pl:               c.netPL,          // net P/L used for realized totals
-        netPLPercent:     c.netPLPercent,
-        date:             new Date().toLocaleDateString()
+        pl: c.netPL,
+        date: new Date().toLocaleDateString()
     };
 
-    history.push(soldData);
-    stocks.splice(i, 1);
+    // Update the logic for the Active Stocks array
+    if (qtyToSell === stock.quantity) {
+        stocks.splice(i, 1); // Full sale
+    } else {
+        stock.quantity -= qtyToSell; // Partial sale - keeps the rest!
+    }
 
+    history.push(soldData);
     displayStocks();
     displayHistory();
     await saveToCloud();
 };
-
 window.updateStock = async (i, field, value) => {
     const val = parseFloat(value);
     if (!isNaN(val)) {
