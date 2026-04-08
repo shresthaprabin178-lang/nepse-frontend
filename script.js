@@ -266,21 +266,37 @@ window.rollbackSale = async (i) => {
     alert("Stock restored to active portfolio!");
 };
 
-// ─── TAB SWITCHING ────────────────────────────────────────────────────────────
 window.switchTab = (tab) => {
-    const isPortfolio = tab === 'portfolio';
-    const pView = $('portfolio-view'), hView = $('history-view');
-    const pTab  = $('tab-portfolio'),  hTab  = $('tab-history');
-    if (!pView || !hView) return;
+    // 1. Define all possible views and buttons
+    const views = {
+        portfolio: $('portfolio-view'),
+        history: $('history-view'),
+        signals: $('signals-view')
+    };
+    
+    const buttons = {
+        portfolio: $('tab-portfolio'),
+        history: $('tab-history'),
+        signals: $('tab-signals')
+    };
 
-    pView.style.display = isPortfolio ? 'block' : 'none';
-    hView.style.display = isPortfolio ? 'none'  : 'block';
-    pTab?.classList.toggle('active',  isPortfolio);
-    hTab?.classList.toggle('active', !isPortfolio);
+    // 2. Loop through and hide everything, then show only the selected one
+    Object.keys(views).forEach(key => {
+        if (views[key]) {
+            views[key].style.display = (key === tab) ? 'block' : 'none';
+        }
+        if (buttons[key]) {
+            buttons[key].classList.toggle('active', key === tab);
+        }
+    });
 
-    if (!isPortfolio) displayHistory();
+    // 3. Trigger specific data loads
+    if (tab === 'history') displayHistory();
+    if (tab === 'signals') {
+        // Optional: Auto-sync ShareSansar when opening the tab
+        // importShareSansarData(); 
+    }
 };
-
 window.sortStocks = (field) => {
     if (field === 'name')
         stocks.sort((a, b) => a.name.localeCompare(b.name));
@@ -421,42 +437,60 @@ if (window.Notification && Notification.permission !== "granted")
     Notification.requestPermission();
 
 setInterval(fetchAllLTPs, 60000);
-async function importShareSansarData() {
-    const proxyUrl = "https://api.allorigins.win/get?url=";
-    const targetUrl = encodeURIComponent("https://www.sharesansar.com/today-share-price");
 
+
+async function importShareSansarData() {
+    const btn = event.target;
+    btn.innerText = "⏳ Syncing...";
+    
     try {
-        console.log("Fetching ShareSansar data...");
-        const response = await fetch(`${proxyUrl}${targetUrl}`);
+        const response = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent('https://www.sharesansar.com/today-share-price')}`);
         const data = await response.json();
-        
-        // Parse the HTML string into a readable document
         const parser = new DOMParser();
         const doc = parser.parseFromString(data.contents, 'text/html');
         const rows = doc.querySelectorAll('#headFixed tbody tr');
 
-        let tempMarketData = [];
+        const signalsBody = document.getElementById("signalsBody");
+        signalsBody.innerHTML = ""; // Clear loader
 
         rows.forEach(row => {
             const cols = row.querySelectorAll('td');
             if (cols.length > 0) {
-                tempMarketData.push({
-                    symbol: cols[1].innerText.trim(),
-                    ltp: parseFloat(cols[6].innerText.replace(/,/g, '')),    // LTP is Column 7
-                    low52: parseFloat(cols[20].innerText.replace(/,/g, '')), // 52W Low is Column 21
-                    sector: cols[21] ? cols[21].innerText.trim() : "Unknown" // Sector is usually last
-                });
+                const symbol = cols[1].innerText.trim();
+                const ltp = parseFloat(cols[6].innerText.replace(/,/g, ''));
+                const low52 = parseFloat(cols[20].innerText.replace(/,/g, ''));
+                
+                // Logic: Commercial Banks within 10% of 52W Low
+                // Note: ShareSansar usually has sector in the last columns
+                // For now, let's filter symbols known as banks or all cheap stocks
+                if (ltp <= (low52 * 1.10)) {
+                    const safetyMargin = (((ltp - low52) / low52) * 100).toFixed(2);
+                    
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td><strong>${symbol}</strong></td>
+                        <td>Rs. ${ltp}</td>
+                        <td style="color: var(--red)">Rs. ${low52}</td>
+                        <td><span class="status-tag">${safetyMargin}% above low</span></td>
+                        <td><button class="btn-sell" style="background:var(--gold)" onclick="quickAdd('${symbol}', ${ltp})">Add</button></td>
+                    `;
+                    signalsBody.innerHTML += tr.innerHTML;
+                }
             }
         });
-
-        allMarketData = tempMarketData;
-        console.log(`Imported ${allMarketData.length} stocks.`);
         
-        // Now run the filter logic to fill the Buy Signals tab
-        generateBuySignals();
-
-    } catch (error) {
-        console.error("Error importing from ShareSansar:", error);
-        alert("Failed to import data. Check your internet connection.");
+        btn.innerText = "🔄 Sync ShareSansar";
+    } catch (e) {
+        console.error(e);
+        alert("Failed to sync. Try again later.");
+        btn.innerText = "🔄 Sync ShareSansar";
     }
 }
+
+// Helper to fill the add stock inputs quickly
+window.quickAdd = (symbol, price) => {
+    switchTab('portfolio');
+    document.getElementById('stockName').value = symbol;
+    document.getElementById('wacc').value = price;
+    document.getElementById('quantity').focus();
+};
