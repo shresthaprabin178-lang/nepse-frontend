@@ -421,3 +421,42 @@ if (window.Notification && Notification.permission !== "granted")
     Notification.requestPermission();
 
 setInterval(fetchAllLTPs, 60000);
+async function importShareSansarData() {
+    const proxyUrl = "https://api.allorigins.win/get?url=";
+    const targetUrl = encodeURIComponent("https://www.sharesansar.com/today-share-price");
+
+    try {
+        console.log("Fetching ShareSansar data...");
+        const response = await fetch(`${proxyUrl}${targetUrl}`);
+        const data = await response.json();
+        
+        // Parse the HTML string into a readable document
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(data.contents, 'text/html');
+        const rows = doc.querySelectorAll('#headFixed tbody tr');
+
+        let tempMarketData = [];
+
+        rows.forEach(row => {
+            const cols = row.querySelectorAll('td');
+            if (cols.length > 0) {
+                tempMarketData.push({
+                    symbol: cols[1].innerText.trim(),
+                    ltp: parseFloat(cols[6].innerText.replace(/,/g, '')),    // LTP is Column 7
+                    low52: parseFloat(cols[20].innerText.replace(/,/g, '')), // 52W Low is Column 21
+                    sector: cols[21] ? cols[21].innerText.trim() : "Unknown" // Sector is usually last
+                });
+            }
+        });
+
+        allMarketData = tempMarketData;
+        console.log(`Imported ${allMarketData.length} stocks.`);
+        
+        // Now run the filter logic to fill the Buy Signals tab
+        generateBuySignals();
+
+    } catch (error) {
+        console.error("Error importing from ShareSansar:", error);
+        alert("Failed to import data. Check your internet connection.");
+    }
+}
