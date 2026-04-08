@@ -164,75 +164,80 @@ window.deleteStock = async (i) => {
     await saveToCloud();
 };
 
-window.sellStock = async (i) => {
+let currentSellIndex = null; // Track which stock is being sold
+
+window.sellStock = (i) => {
+    currentSellIndex = i;
     const stock = stocks[i];
     
-    // 1. Ask for QUANTITY to sell
-    const rawQty = prompt(`How many shares of ${stock.name} do you want to sell? (Available: ${stock.quantity})`, stock.quantity);
-    if (rawQty === null) return;
-    const qtyToSell = parseFloat(rawQty);
+    // Fill the Modal with the stock data
+    document.getElementById("sellModalTitle").innerText = `Sell ${stock.name}`;
+    document.getElementById("maxQty").innerText = stock.quantity;
+    document.getElementById("modalSellQty").value = stock.quantity;
+    document.getElementById("modalSellPrice").value = stock.ltp || 0;
     
-    if (isNaN(qtyToSell) || qtyToSell <= 0 || qtyToSell > stock.quantity) {
-        return alert("Invalid quantity. Please enter a number between 1 and " + stock.quantity);
-    }
+    // Show the Modal
+    document.getElementById("sellModal").style.display = "flex";
+    
+    // Run initial calculation
+    calculateSellPreview();
+};
 
-    // 2. Ask for PRICE
-    const rawPrice = prompt(`Sell price for ${stock.name}:`, stock.ltp);
-    if (rawPrice === null) return;
-    const sellPrice = parseFloat(rawPrice);
-    if (isNaN(sellPrice) || sellPrice <= 0) return alert("Invalid sell price.");
+// This function runs every time you type in the Modal
+window.calculateSellPreview = () => {
+    const stock = stocks[currentSellIndex];
+    const qty = parseFloat(document.getElementById("modalSellQty").value) || 0;
+    const price = parseFloat(document.getElementById("modalSellPrice").value) || 0;
+    const isLongTerm = document.getElementById("modalHoldingPeriod").value === "long";
 
-    // 3. Ask for HOLDING PERIOD (CGT Rate)
-    const isLongTerm = confirm(
-        `Holding Period for ${qtyToSell} shares:\n\nOK = >1 Year (5% CGT)\nCancel = <1 Year (7.5% CGT)`
-    );
+    // Use your math helper (Ensure calcNepseSell is defined in your script!)
+    const c = calcNepseSell(stock.wacc, price, qty, isLongTerm);
 
-    // 4. Perform Calculations (Using your existing calcNepseSell helper)
-    const c = calcNepseSell(stock.wacc, sellPrice, qtyToSell, isLongTerm);
-    const plSign = c.netPL >= 0 ? "+" : "";
+    // Update the Modal's calculation rows
+    document.getElementById("sCalcAmount").innerText = `Rs. ${c.totalSellAmount.toLocaleString()}`;
+    document.getElementById("sCalcBroker").innerText = `-Rs. ${c.brokerFee.toFixed(2)}`;
+    document.getElementById("sCalcSebon").innerText = `-Rs. ${c.sebonFee.toFixed(2)}`;
+    document.getElementById("sCalcCGT").innerText = `-Rs. ${c.cgt.toFixed(2)}`;
+    document.getElementById("sCalcNet").innerText = `Rs. ${c.netReceiveAmount.toLocaleString()}`;
+    
+    const plEl = document.getElementById("sCalcPL");
+    plEl.innerText = `Rs. ${c.netPL.toLocaleString()}`;
+    plEl.className = `calc-row ${c.netPL >= 0 ? "profit" : "loss"}`;
 
-    // 5. THE DYNAMIC BREAKDOWN WINDOW
-    const confirmed = confirm(
-        `📊 SELL CALCULATION: ${stock.name}\n` +
-        `━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `Selling: ${qtyToSell} / ${stock.quantity} shares\n` +
-        `Rate: Rs. ${sellPrice.toLocaleString()}\n` +
-        `Total Amount: Rs. ${c.totalSellAmount.toLocaleString()}\n\n` +
-        `📉 DEDUCTIONS:\n` +
-        `• Broker Fee (${(getBrokerRate(c.totalSellAmount)*100).toFixed(2)}%): Rs. ${c.brokerFee.toLocaleString()}\n` +
-        `• SEBON Fee (0.015%): Rs. ${c.sebonFee.toLocaleString()}\n` +
-        `• DP Charge: Rs. ${c.dpFee}\n` +
-        `• CGT (${(c.cgtRate * 100).toFixed(1)}%): Rs. ${c.cgt.toLocaleString()}\n` +
-        `━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `💰 NET RECEIVABLE: Rs. ${c.netReceiveAmount.toLocaleString()}\n` +
-        `📈 NET P/L: ${plSign}Rs. ${c.netPL.toLocaleString()} (${plSign}${c.netPLPercent.toFixed(2)}%)\n\n` +
-        `Confirm this partial sale?`
-    );
+    // Update the Confirm button to finalize this specific sale
+    document.getElementById("confirmSellBtn").onclick = () => finalizeSell(qty, price, isLongTerm, c);
+};
 
-    if (!confirmed) return;
+async function finalizeSell(qty, price, isLongTerm, c) {
+    const stock = stocks[currentSellIndex];
+    
+    if (qty > stock.quantity) return alert("Quantity exceeds balance!");
 
-    // 6. EXECUTE SALE
     const soldData = {
         name: stock.name,
-        quantity: qtyToSell,
+        quantity: qty,
         buyPrice: stock.wacc,
-        sellPrice,
-        isLongTerm,
+        sellPrice: price,
         pl: c.netPL,
         date: new Date().toLocaleDateString()
     };
 
-    // Update the logic for the Active Stocks array
-    if (qtyToSell === stock.quantity) {
-        stocks.splice(i, 1); // Full sale
+    history.push(soldData);
+
+    if (qty === stock.quantity) {
+        stocks.splice(currentSellIndex, 1);
     } else {
-        stock.quantity -= qtyToSell; // Partial sale - keeps the rest!
+        stock.quantity -= qty;
     }
 
-    history.push(soldData);
     displayStocks();
     displayHistory();
     await saveToCloud();
+    closeSellModal();
+}
+
+window.closeSellModal = () => {
+    document.getElementById("sellModal").style.display = "none";
 };
 window.updateStock = async (i, field, value) => {
     const val = parseFloat(value);

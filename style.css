@@ -233,3 +233,13 @@ td.net-receive {
     color: var(--text-dim);
     font-size: 0.9rem;
 }
+.sell-badge { background: #3d1e1e; color: #f87171; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; }
+.sell-btn { background: #ef4444 !important; } /* Red for selling */
+
+select {
+    width: 100%; background: var(--input-bg); border: 1px solid var(--border-color); 
+    padding: 10px; border-radius: 8px; color: var(--modal-text); margin-bottom: 15px;
+}
+
+#sCalcPL.profit { color: #10b981; font-weight: bold; }
+#sCalcPL.loss { color: #ef4444; font-weight: bold; }
